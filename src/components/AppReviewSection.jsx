@@ -46,7 +46,7 @@ function MessagesTable({ messages, onViewDetail }) {
 
   return (
     <div className="mb-6">
-      <h3 className="text-[12px] font-bold text-dark-text uppercase tracking-wide mb-1">Messages</h3>
+      <h3 className="text-[12px] font-bold text-dark-text uppercase tracking-wide mb-1">Unresolved Issues</h3>
       <p className="text-[12px] text-dark-dim mb-3 mt-0">
         Review messages with unresolved issues that require your attention.
       </p>

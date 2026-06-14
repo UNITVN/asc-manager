@@ -241,6 +241,21 @@ export async function fetchReviewSubmissionDetail(appId, submissionId, accountId
   return res.json();
 }
 
+export async function fetchResolutionCenter(appId, submissionId, accountId) {
+  const params = new URLSearchParams({ accountId });
+  const res = await fetch(
+    `/api/apps/${appId}/review-submissions/${submissionId}/resolution-center?${params}`
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.error || `Failed to fetch resolution center: ${res.status}`);
+    err.status = res.status;
+    err.code = data.code;
+    throw err;
+  }
+  return data;
+}
+
 // ── In-App Purchases ─────────────────────────────────────────────────────────
 
 export async function fetchIAPs(appId, accountId) {

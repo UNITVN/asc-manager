@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { fetchReviewSubmissionDetail } from "../api/index.js";
+import { fetchReviewSubmissionDetail, fetchResolutionCenter } from "../api/index.js";
 import { ReviewStatus, formatDate } from "./AppReviewSection.jsx";
 import AppIcon from "./AppIcon.jsx";
 
@@ -35,27 +35,163 @@ function DetailRow({ label, children }) {
   );
 }
 
+function RejectionReasons({ rejections }) {
+  if (!rejections?.length) return null;
+  return (
+    <div className="mt-3 space-y-2">
+      {rejections.map((rejection) => (
+        <div key={rejection.id} className="rounded-lg border border-dark-border bg-dark-bg/50 p-3">
+          {rejection.reasons?.map((reason, idx) => (
+            <div key={idx} className="text-[12px] text-dark-text">
+              {reason.reasonSection && (
+                <span className="font-semibold text-accent">{reason.reasonSection}</span>
+              )}
+              {reason.reasonCode && (
+                <span className="text-dark-dim ml-2">({reason.reasonCode})</span>
+              )}
+              {reason.reasonDescription && (
+                <p className="mt-1 text-dark-dim m-0">{reason.reasonDescription}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ResolutionCenterSection({ rcState }) {
+  const { loading, data, error } = rcState;
+
+  if (loading) {
+    return (
+      <div className="bg-dark-surface rounded-[10px] px-4 py-6 text-center">
+        <span className="text-[12px] text-dark-dim">Loading Resolution Center messages...</span>
+      </div>
+    );
+  }
+
+  if (error?.code === "WEB_SESSION_REQUIRED") {
+    return (
+      <div className="bg-dark-surface rounded-[10px] p-5">
+        <h3 className="text-[12px] font-bold text-dark-text uppercase tracking-wide mb-2">
+          Resolution Center
+        </h3>
+        <p className="text-[13px] text-dark-dim m-0">
+          No Apple ID web session is linked for this ASC account. An admin can link one in{" "}
+          <a href="/admin" className="text-accent">Admin</a>.
+        </p>
+      </div>
+    );
+  }
+
+  if (error?.code === "WEB_SESSION_EXPIRED") {
+    return (
+      <div className="bg-dark-surface rounded-[10px] p-5">
+        <h3 className="text-[12px] font-bold text-dark-text uppercase tracking-wide mb-2">
+          Resolution Center
+        </h3>
+        <p className="text-[13px] text-dark-dim m-0">
+          The Apple ID web session has expired. An admin must re-link the account in{" "}
+          <a href="/admin" className="text-accent">Admin</a>.
+        </p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-dark-surface rounded-[10px] p-5">
+        <h3 className="text-[12px] font-bold text-dark-text uppercase tracking-wide mb-2">
+          Resolution Center
+        </h3>
+        <p className="text-[13px] text-dark-dim m-0">
+          {error.message || "Failed to load Resolution Center messages."}
+        </p>
+      </div>
+    );
+  }
+
+  const threads = data?.threads || [];
+  if (!threads.length) {
+    return (
+      <div className="bg-dark-surface rounded-[10px] p-5">
+        <h3 className="text-[12px] font-bold text-dark-text uppercase tracking-wide mb-2">
+          Resolution Center
+        </h3>
+        <p className="text-[13px] text-dark-dim m-0">No messages in the Resolution Center for this submission.</p>
+      </div>
+    );
+  }
+
+  const allMessages = threads
+    .flatMap((thread) =>
+      (thread.messages || []).map((msg) => ({ ...msg, threadType: thread.threadType }))
+    )
+    .sort((a, b) => new Date(a.createdDate) - new Date(b.createdDate));
+
+  return (
+    <div className="bg-dark-surface rounded-[10px] p-5">
+      <h3 className="text-[12px] font-bold text-dark-text uppercase tracking-wide mb-1">
+        Resolution Center
+      </h3>
+      <p className="text-[12px] text-dark-dim mb-4 mt-0">
+        Messages from App Review (via linked Apple ID web session).
+      </p>
+      <div className="space-y-4">
+        {allMessages.map((msg) => (
+          <div key={msg.id} className="border border-dark-border rounded-lg p-4">
+            <div className="flex items-baseline justify-between gap-3 mb-2">
+              <span className="text-[13px] font-semibold text-dark-text">
+                {msg.fromActor?.name || "App Review"}
+              </span>
+              <span className="text-[11px] text-dark-dim shrink-0">{formatDate(msg.createdDate)}</span>
+            </div>
+            <p className="text-[13px] text-dark-text m-0 whitespace-pre-wrap leading-relaxed">
+              {msg.messageBodyPlain || msg.messageBody || "\u2014"}
+            </p>
+            <RejectionReasons rejections={msg.rejections} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function ReviewSubmissionDetail({ app, submissionId, isMobile }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [rcState, setRcState] = useState({ loading: true, data: null, error: null });
 
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setRcState({ loading: true, data: null, error: null });
 
     fetchReviewSubmissionDetail(app.id, submissionId, app.accountId)
       .then((result) => { if (!cancelled) setData(result); })
       .catch((err) => { if (!cancelled) setError(err.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
 
+    fetchResolutionCenter(app.id, submissionId, app.accountId)
+      .then((result) => { if (!cancelled) setRcState({ loading: false, data: result, error: null }); })
+      .catch((err) => {
+        if (!cancelled) {
+          setRcState({
+            loading: false,
+            data: null,
+            error: { message: err.message, code: err.code, status: err.status },
+          });
+        }
+      });
+
     return () => { cancelled = true; };
   }, [app.id, submissionId, app.accountId]);
 
   return (
     <div style={{ animation: "asc-slidein 0.3s ease backwards" }}>
-      {/* Breadcrumb */}
       <div className={`sticky top-0 z-10 bg-dark-bg/80 backdrop-blur-lg border-b border-dark-border ${isMobile ? "px-3 py-3" : "px-7 py-3"}`}>
         <div className="flex items-center gap-3">
           <button
@@ -69,7 +205,6 @@ export default function ReviewSubmissionDetail({ app, submissionId, isMobile }) 
       </div>
 
       <div className={`${isMobile ? "px-3 py-4" : "px-7 py-5"} max-w-4xl`}>
-        {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <AppIcon app={app} size={48} />
           <div>
@@ -99,7 +234,6 @@ export default function ReviewSubmissionDetail({ app, submissionId, isMobile }) 
 
         {data && (
           <div className="space-y-6">
-            {/* Submission Info */}
             <div className="bg-dark-surface rounded-[10px] p-5">
               <h3 className="text-[12px] font-bold text-dark-text uppercase tracking-wide mb-3">Details</h3>
               <DetailRow label="Status"><ReviewStatus status={data.displayStatus} /></DetailRow>
@@ -110,7 +244,6 @@ export default function ReviewSubmissionDetail({ app, submissionId, isMobile }) 
               {data.lastUpdatedBy && <DetailRow label="Last Updated By">{data.lastUpdatedBy}</DetailRow>}
             </div>
 
-            {/* Items */}
             {data.items && data.items.length > 0 && (
               <div className="bg-dark-surface rounded-[10px] p-5">
                 <h3 className="text-[12px] font-bold text-dark-text uppercase tracking-wide mb-3">
@@ -155,6 +288,8 @@ export default function ReviewSubmissionDetail({ app, submissionId, isMobile }) 
                 </div>
               </div>
             )}
+
+            <ResolutionCenterSection rcState={rcState} />
           </div>
         )}
       </div>
