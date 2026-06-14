@@ -471,7 +471,7 @@ router.get("/:appId/builds", async (req, res) => {
     let url;
     if (versionString) {
       // /v1/builds supports include
-      url = `/v1/builds?filter[app]=${appId}&filter[preReleaseVersion.version]=${encodeURIComponent(versionString)}&fields[builds]=${baseFields}&include=appEncryptionDeclaration&fields[appEncryptionDeclarations]=appEncryptionDeclarationState&limit=25`;
+      url = `/v1/builds?filter[app]=${appId}&filter[preReleaseVersion.version]=${encodeURIComponent(versionString)}&fields[builds]=${baseFields}&include=appEncryptionDeclaration&fields[appEncryptionDeclarations]=usesEncryption,appEncryptionDeclarationState&limit=25`;
     } else {
       // /v1/apps/{id}/builds does NOT support include
       url = `/v1/apps/${appId}/builds?fields[builds]=${baseFields}&limit=25`;
@@ -512,7 +512,7 @@ router.get("/:appId/builds", async (req, res) => {
         buildAudienceType: attrs.buildAudienceType,
         iconUrl,
         encryptionDeclarationId: declId,
-        usesNonExemptEncryption: attrs.usesNonExemptEncryption ?? null,
+        usesNonExemptEncryption: declAttrs?.usesEncryption ?? attrs.usesNonExemptEncryption ?? null,
         complianceState,
       };
     }).sort((a, b) => new Date(b.uploadedDate) - new Date(a.uploadedDate));
@@ -616,7 +616,7 @@ router.get("/:appId/builds/:buildId/encryptionDeclaration", async (req, res) => 
   try {
     const data = await ascFetch(
       account,
-      `/v1/builds/${buildId}/appEncryptionDeclaration?fields[appEncryptionDeclarations]=appEncryptionDeclarationState,containsProprietaryCryptography,containsThirdPartyCryptography,availableOnFrenchStore,codeValue,platform`
+      `/v1/builds/${buildId}/appEncryptionDeclaration?fields[appEncryptionDeclarations]=usesEncryption,appEncryptionDeclarationState,containsProprietaryCryptography,containsThirdPartyCryptography,availableOnFrenchStore,codeValue,platform`
     );
 
     const decl = data.data
