@@ -161,7 +161,7 @@ export default function AnalyticsPage({ app, isAdmin, isMobile }) {
                 Analytics require a vendor number for this ASC account.
                 {isAdmin
                   ? " Add it below to enable Sales & Trends reporting."
-                  : " Ask an admin to configure the vendor number in account settings."}
+                  : " Ask an admin to configure the vendor number in Admin (/admin)."}
               </p>
               {isAdmin && (
                 <div className="flex flex-col sm:flex-row gap-2">

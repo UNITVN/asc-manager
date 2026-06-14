@@ -21,6 +21,7 @@ export default function Sidebar({
   apps,
   closeSidebarOnMobile,
   onShowAdd,
+  isAdmin,
 }) {
   const presentStatuses = Object.keys(STATUS_MAP).filter((s) =>
     apps.some((a) => a.status === s)
@@ -201,6 +202,14 @@ export default function Sidebar({
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-dark-border min-w-[240px]">
+        {isAdmin && (
+          <a
+            href="/admin"
+            className="block text-center text-[11px] font-semibold text-accent no-underline mb-2 hover:brightness-110"
+          >
+            Admin
+          </a>
+        )}
         <div className="text-[10px] text-dark-phantom text-center leading-relaxed">
           App Store Connect API v2<br />
           {accounts.length} account{accounts.length !== 1 ? "s" : ""} connected

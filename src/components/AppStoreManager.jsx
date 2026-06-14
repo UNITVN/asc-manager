@@ -500,6 +500,7 @@ export default function AppStoreManager() {
         apps={apps}
         closeSidebarOnMobile={closeSidebarOnMobile}
         onShowAdd={() => setShowAdd(true)}
+        isAdmin={currentUser?.role === "admin"}
       />
 
       {isMobile && sidebarOpen && (
