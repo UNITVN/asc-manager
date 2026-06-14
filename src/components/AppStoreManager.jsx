@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useIsMobile } from "../hooks/useIsMobile.js";
-import { fetchApps, fetchAccounts, createAccount, fetchVersions, fetchCiBuildRuns } from "../api/index.js";
+import { fetchApps, fetchAccounts, createAccount, fetchVersions, fetchCiBuildRuns, fetchCurrentUser, setVendorNumber } from "../api/index.js";
 import { STATUS_MAP } from "../constants/index.js";
 import TopBar from "./TopBar.jsx";
 import Sidebar from "./Sidebar.jsx";
@@ -10,6 +10,7 @@ import AppDetailPage from "./AppDetailPage.jsx";
 import VersionDetailPage from "./VersionDetailPage.jsx";
 import ProductsPage from "./ProductsPage.jsx";
 import XcodeCloudPage from "./XcodeCloudPage.jsx";
+import AnalyticsPage from "./AnalyticsPage.jsx";
 import BuildDetailPage from "./BuildDetailPage.jsx";
 import WorkflowEditPage from "./WorkflowEditPage.jsx";
 import ReviewSubmissionDetail from "./ReviewSubmissionDetail.jsx";
@@ -50,6 +51,8 @@ function getRouteFromPath() {
   if (xcodeCloudBuildMatch) return { appId: xcodeCloudBuildMatch[1], versionId: null, subPage: "xcode-cloud-build", buildId: xcodeCloudBuildMatch[2] };
   const xcodeCloudMatch = path.match(/^\/app\/([^/]+)\/xcode-cloud$/);
   if (xcodeCloudMatch) return { appId: xcodeCloudMatch[1], versionId: null, subPage: "xcode-cloud" };
+  const analyticsMatch = path.match(/^\/app\/([^/]+)\/analytics$/);
+  if (analyticsMatch) return { appId: analyticsMatch[1], versionId: null, subPage: "analytics" };
   const reviewMatch = path.match(/^\/app\/([^/]+)\/review\/([^/]+)$/);
   if (reviewMatch) return { appId: reviewMatch[1], versionId: null, subPage: "review", submissionId: reviewMatch[2] };
   const appMatch = path.match(/^\/app\/([^/]+)$/);
@@ -70,6 +73,7 @@ export default function AppStoreManager() {
   const [groupBy, setGroupBy] = useState("account");
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [showAdd, setShowAdd] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
     setSidebarOpen(!isMobile);
@@ -113,6 +117,13 @@ export default function AppStoreManager() {
     setSelectedBuildRun(null);
     setCurrentView("xcode-cloud");
     window.history.pushState({ appId: app.id, subPage: "xcode-cloud" }, "", `/app/${app.id}/xcode-cloud`);
+  }, []);
+
+  const navigateToAnalytics = useCallback((app) => {
+    setSelectedApp(app);
+    setSelectedVersion(null);
+    setCurrentView("analytics");
+    window.history.pushState({ appId: app.id, subPage: "analytics" }, "", `/app/${app.id}/analytics`);
   }, []);
 
   const [selectedBuildRun, setSelectedBuildRun] = useState(null);
@@ -216,6 +227,12 @@ export default function AppStoreManager() {
           setSelectedApp(appMatch);
           setCurrentView("xcode-cloud");
         }
+      } else if (route.subPage === "analytics") {
+        const appMatch = appsList.find((a) => a.id === route.appId);
+        if (appMatch) {
+          setSelectedApp(appMatch);
+          setCurrentView("analytics");
+        }
       } else if (route.appId) {
         const match = appsList.find((a) => a.id === route.appId);
         if (match) {
@@ -235,6 +252,12 @@ export default function AppStoreManager() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    fetchCurrentUser()
+      .then((data) => setCurrentUser(data.user))
+      .catch(() => setCurrentUser(null));
+  }, []);
 
   useEffect(() => {
     function onPopState() {
@@ -321,6 +344,13 @@ export default function AppStoreManager() {
         setSelectedApp(appMatch || null);
         setSelectedBuildRun(null);
         setCurrentView(appMatch ? "xcode-cloud" : null);
+        return;
+      }
+
+      if (route.subPage === "analytics") {
+        const appMatch = apps.find((a) => a.id === route.appId);
+        setSelectedApp(appMatch || null);
+        setCurrentView(appMatch ? "analytics" : null);
         return;
       }
 
@@ -425,6 +455,18 @@ export default function AppStoreManager() {
     );
   }
 
+  if (currentView === "analytics" && selectedApp) {
+    return (
+      <div className="font-sans bg-dark-bg text-dark-text min-h-screen antialiased">
+        <AnalyticsPage
+          app={selectedApp}
+          isAdmin={currentUser?.role === "admin"}
+          isMobile={isMobile}
+        />
+      </div>
+    );
+  }
+
   if (selectedApp) {
     return (
       <div className="font-sans bg-dark-bg text-dark-text min-h-screen antialiased">
@@ -435,6 +477,7 @@ export default function AppStoreManager() {
           onSelectVersion={(version) => selectVersion(version, selectedApp)}
           onViewProducts={() => navigateToProducts(selectedApp)}
           onViewXcodeCloud={() => navigateToXcodeCloud(selectedApp)}
+          onViewAnalytics={() => navigateToAnalytics(selectedApp)}
           onViewReviewDetail={(submissionId) => navigateToReviewDetail(submissionId, selectedApp)}
         />
       </div>
@@ -517,13 +560,16 @@ export default function AppStoreManager() {
           onClose={() => setShowAdd(false)}
           onAdd={async (a) => {
             try {
-              await createAccount({
+              const created = await createAccount({
                 name: a.name,
                 issuerId: a.issuer,
                 keyId: a.keyId,
                 privateKey: a.pk,
                 color: a.color,
               });
+              if (a.vendorNumber?.trim()) {
+                await setVendorNumber(created.id, a.vendorNumber.trim());
+              }
               loadData();
             } catch (err) {
               console.error("Failed to add account:", err);

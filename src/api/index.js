@@ -665,3 +665,48 @@ export async function fetchCiXcodeVersions(appId, accountId) {
   return res.json();
 }
 
+export async function fetchCurrentUser() {
+  const res = await fetch("/api/auth/me");
+  if (!res.ok) throw new Error(`Failed to fetch current user: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchAppSales(appId, accountId, { days = 30 } = {}) {
+  const params = new URLSearchParams({ accountId, days: String(days) });
+  const res = await fetch(`/api/apps/${appId}/sales?${params}`);
+  if (res.status === 409) {
+    const err = await res.json().catch(() => ({}));
+    const error = new Error(err.error || "Vendor number not configured");
+    error.code = err.code || "VENDOR_NUMBER_NOT_CONFIGURED";
+    error.status = 409;
+    throw error;
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const error = new Error(err.error || `Failed to fetch sales: ${res.status}`);
+    error.code = err.code;
+    error.status = res.status;
+    throw error;
+  }
+  return res.json();
+}
+
+export async function fetchVendorNumber(accountId) {
+  const res = await fetch(`/api/accounts/${accountId}/vendor-number`);
+  if (!res.ok) throw new Error(`Failed to fetch vendor number: ${res.status}`);
+  return res.json();
+}
+
+export async function setVendorNumber(accountId, vendorNumber) {
+  const res = await fetch(`/api/accounts/${accountId}/vendor-number`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ vendorNumber }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to set vendor number: ${res.status}`);
+  }
+  return res.json();
+}
+

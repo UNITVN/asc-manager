@@ -188,3 +188,65 @@ export const TERRITORIES = [
 ];
 
 export const TERRITORY_MAP = new Map(TERRITORIES.map((t) => [t.code, t]));
+
+// ISO 3166-1 alpha-2 codes used in Sales & Trends daily reports.
+export const ALPHA2_TERRITORY_MAP = new Map([
+  ["US", "United States"],
+  ["GB", "United Kingdom"],
+  ["JP", "Japan"],
+  ["DE", "Germany"],
+  ["FR", "France"],
+  ["CA", "Canada"],
+  ["AU", "Australia"],
+  ["CN", "China mainland"],
+  ["KR", "South Korea"],
+  ["IN", "India"],
+  ["BR", "Brazil"],
+  ["MX", "Mexico"],
+  ["IT", "Italy"],
+  ["ES", "Spain"],
+  ["NL", "Netherlands"],
+  ["SE", "Sweden"],
+  ["CH", "Switzerland"],
+  ["TW", "Taiwan"],
+  ["HK", "Hong Kong"],
+  ["SG", "Singapore"],
+  ["RU", "Russia"],
+  ["TR", "Turkey"],
+  ["SA", "Saudi Arabia"],
+  ["AE", "United Arab Emirates"],
+  ["PL", "Poland"],
+  ["ID", "Indonesia"],
+  ["TH", "Thailand"],
+  ["VN", "Vietnam"],
+  ["PH", "Philippines"],
+  ["MY", "Malaysia"],
+  ["NZ", "New Zealand"],
+  ["IE", "Ireland"],
+  ["AT", "Austria"],
+  ["BE", "Belgium"],
+  ["NO", "Norway"],
+  ["DK", "Denmark"],
+  ["FI", "Finland"],
+  ["PT", "Portugal"],
+  ["CZ", "Czech Republic"],
+  ["RO", "Romania"],
+  ["HU", "Hungary"],
+  ["GR", "Greece"],
+  ["IL", "Israel"],
+  ["ZA", "South Africa"],
+  ["AR", "Argentina"],
+  ["CL", "Chile"],
+  ["CO", "Colombia"],
+  ["PE", "Peru"],
+  ["UA", "Ukraine"],
+  ["EG", "Egypt"],
+  ["NG", "Nigeria"],
+  ["PK", "Pakistan"],
+]);
+
+export function territoryNameFromAlpha2(code) {
+  if (!code) return "Unknown";
+  const upper = String(code).toUpperCase();
+  return ALPHA2_TERRITORY_MAP.get(upper) || upper;
+}

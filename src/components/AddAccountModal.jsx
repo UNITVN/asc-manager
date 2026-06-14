@@ -6,6 +6,7 @@ export default function AddAccountModal({ onClose, onAdd, isMobile }) {
   const [issuer, setIssuer] = useState("");
   const [keyId, setKeyId] = useState("");
   const [pk, setPk] = useState("");
+  const [vendorNumber, setVendorNumberInput] = useState("");
 
   const disabled = !name || !issuer || !keyId;
 
@@ -141,6 +142,26 @@ export default function AddAccountModal({ onClose, onAdd, isMobile }) {
               </div>
             </div>
           </div>
+
+          {/* Section 3: Sales reporting (optional) */}
+          <div className="mb-2">
+            <div className="flex items-center gap-2.5 mb-4">
+              <span className="w-6 h-6 rounded-full bg-dark-hover text-dark-dim text-[11px] font-bold flex items-center justify-center shrink-0">3</span>
+              <span className="text-[13px] font-semibold text-dark-text">Sales Reporting (optional)</span>
+            </div>
+            <div>
+              <label className={labelCls}>Vendor Number</label>
+              <input
+                className={`w-full px-3.5 py-3 bg-dark-surface border border-dark-border-light rounded-lg text-dark-text outline-none font-mono transition-colors ${isMobile ? "text-base" : "text-[13px]"}`}
+                placeholder="e.g. 81234567"
+                value={vendorNumber}
+                onChange={(e) => setVendorNumberInput(e.target.value)}
+              />
+              <p className={helperCls}>
+                Required for download stats. Find it in App Store Connect under Payments and Financial Reports (vendorNumber in the URL).
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* Footer */}
@@ -160,6 +181,7 @@ export default function AddAccountModal({ onClose, onAdd, isMobile }) {
                 issuer,
                 keyId,
                 pk,
+                vendorNumber,
                 color: ACCT_COLORS[Math.floor(Math.random() * ACCT_COLORS.length)],
               });
               onClose();
