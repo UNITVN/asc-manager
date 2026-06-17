@@ -269,7 +269,7 @@ router.post("/:appId/versions", async (req, res) => {
 });
 
 router.get("/:appId/versions/:versionId", async (req, res) => {
-  const { versionId } = req.params;
+  const { appId, versionId } = req.params;
   const { accountId } = req.query;
 
   const cacheKey = `apps:version-detail:${versionId}:${accountId || "default"}`;
@@ -301,6 +301,14 @@ router.get("/:appId/versions/:versionId", async (req, res) => {
       }
     }
 
+    let hasUnresolvedSubmission = false;
+    try {
+      const unresolved = await findUnresolvedSubmissionForVersion(account, appId, versionId);
+      hasUnresolvedSubmission = !!unresolved;
+    } catch {
+      // Non-fatal — version detail still useful without submission state
+    }
+
     const result = {
       id: data.data.id,
       versionString: attrs.versionString,
@@ -312,6 +320,7 @@ router.get("/:appId/versions/:versionId", async (req, res) => {
       downloadable: attrs.downloadable,
       reviewType: attrs.reviewType,
       phasedRelease,
+      hasUnresolvedSubmission,
     };
 
     apiCache.set(cacheKey, result);
@@ -1162,6 +1171,161 @@ async function findUnresolvedSubmissionForVersion(account, appId, versionId) {
   return null;
 }
 
+const SUBMISSION_POLL_INTERVAL_MS = 2000;
+const SUBMISSION_POLL_MAX_ATTEMPTS = 15;
+const SUBMIT_RETRY_MAX_ATTEMPTS = 5;
+const SUBMIT_RETRY_BASE_DELAY_MS = 3000;
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isNotReadyToSubmitError(err) {
+  return err.message?.includes("not ready to be submitted yet");
+}
+
+function isAlreadySetEncryptionError(err) {
+  return err.message?.includes("already set");
+}
+
+function isNotCancellableSubmissionError(err) {
+  return err.message?.includes("not in cancellable state");
+}
+
+async function getReviewSubmissionsByPlatform(account, appId, platform) {
+  const data = await ascFetch(
+    account,
+    `/v1/apps/${appId}/reviewSubmissions?filter[platform]=${platform}&limit=25&fields[reviewSubmissions]=state,platform`
+  );
+  return data.data || [];
+}
+
+async function waitForSubmissionState(account, submissionId, acceptableStates) {
+  const allowed = new Set(acceptableStates);
+  for (let i = 0; i < SUBMISSION_POLL_MAX_ATTEMPTS; i++) {
+    const data = await ascFetch(
+      account,
+      `/v1/reviewSubmissions/${submissionId}?fields[reviewSubmissions]=state`
+    );
+    const state = data?.data?.attributes?.state;
+    if (state && allowed.has(state)) return state;
+    await sleep(SUBMISSION_POLL_INTERVAL_MS);
+  }
+  throw new Error(
+    `Review submission ${submissionId} did not reach ${[...allowed].join(", ")} in time`
+  );
+}
+
+async function tryCancelReviewSubmission(account, submissionId) {
+  try {
+    await ascFetch(account, `/v1/reviewSubmissions/${submissionId}`, {
+      method: "PATCH",
+      body: {
+        data: {
+          type: "reviewSubmissions",
+          id: submissionId,
+          attributes: { canceled: true },
+        },
+      },
+    });
+    await waitForSubmissionState(account, submissionId, ["COMPLETE"]);
+    return true;
+  } catch (err) {
+    if (isNotCancellableSubmissionError(err)) return false;
+    throw err;
+  }
+}
+
+async function clearStuckReviewSubmissions(account, appId, platform) {
+  const submissions = await getReviewSubmissionsByPlatform(account, appId, platform);
+  const canceled = [];
+
+  const active = submissions.filter((s) =>
+    ["WAITING_FOR_REVIEW", "IN_REVIEW"].includes(s.attributes.state)
+  );
+  if (active.length > 0) {
+    const state = active[0].attributes.state.replace(/_/g, " ").toLowerCase();
+    throw new Error(
+      `Cannot submit while a review is ${state}. Cancel it in App Store Connect first.`
+    );
+  }
+
+  for (const submission of submissions) {
+    const state = submission.attributes.state;
+    if (state === "UNRESOLVED_ISSUES") {
+      const ok = await tryCancelReviewSubmission(account, submission.id);
+      if (!ok) {
+        throw new Error(`Failed to cancel unresolved review submission ${submission.id}`);
+      }
+      canceled.push(submission.id);
+    } else if (state === "READY_FOR_REVIEW") {
+      const ok = await tryCancelReviewSubmission(account, submission.id);
+      if (ok) canceled.push(submission.id);
+    }
+  }
+
+  return canceled;
+}
+
+async function ensureBuildEncryptionCompliance(account, versionId) {
+  const buildData = await ascFetch(
+    account,
+    `/v1/appStoreVersions/${versionId}/build?fields[builds]=usesNonExemptEncryption`
+  );
+  const build = buildData?.data;
+  if (!build) {
+    throw new Error("No build attached to this version. Attach a build before submitting.");
+  }
+  if (build.attributes.usesNonExemptEncryption != null) return;
+
+  try {
+    await ascFetch(account, `/v1/builds/${build.id}`, {
+      method: "PATCH",
+      body: {
+        data: {
+          type: "builds",
+          id: build.id,
+          attributes: { usesNonExemptEncryption: false },
+        },
+      },
+    });
+  } catch (err) {
+    if (!isAlreadySetEncryptionError(err)) throw err;
+  }
+}
+
+async function submissionAlreadyHasVersion(account, submissionId, versionId) {
+  const items = await ascFetch(
+    account,
+    `/v1/reviewSubmissions/${submissionId}/items?include=appStoreVersion&fields[reviewSubmissionItems]=state&limit=50`
+  );
+  if (items.included?.some((inc) => inc.type === "appStoreVersions" && inc.id === versionId)) {
+    return true;
+  }
+  for (const item of items.data || []) {
+    const versionRef = item.relationships?.appStoreVersion?.data;
+    if (versionRef?.id === versionId) return true;
+  }
+  return false;
+}
+
+async function addVersionToSubmission(account, submissionId, versionId) {
+  if (await submissionAlreadyHasVersion(account, submissionId, versionId)) return;
+
+  await ascFetch(account, "/v1/reviewSubmissionItems", {
+    method: "POST",
+    body: {
+      data: {
+        type: "reviewSubmissionItems",
+        relationships: {
+          reviewSubmission: { data: { type: "reviewSubmissions", id: submissionId } },
+          appStoreVersion: { data: { type: "appStoreVersions", id: versionId } },
+        },
+      },
+    },
+  });
+}
+
 async function submitVersionForReview(account, appId, versionId, platform) {
   let submissionId;
   const existing = await ascFetch(account,
@@ -1185,18 +1349,7 @@ async function submitVersionForReview(account, appId, versionId, platform) {
     submissionId = created.data.id;
   }
 
-  await ascFetch(account, "/v1/reviewSubmissionItems", {
-    method: "POST",
-    body: {
-      data: {
-        type: "reviewSubmissionItems",
-        relationships: {
-          reviewSubmission: { data: { type: "reviewSubmissions", id: submissionId } },
-          appStoreVersion: { data: { type: "appStoreVersions", id: versionId } },
-        },
-      },
-    },
-  });
+  await addVersionToSubmission(account, submissionId, versionId);
 
   await ascFetch(account, `/v1/reviewSubmissions/${submissionId}`, {
     method: "PATCH",
@@ -1210,6 +1363,26 @@ async function submitVersionForReview(account, appId, versionId, platform) {
   });
 
   return submissionId;
+}
+
+async function submitVersionForReviewWithRetry(account, appId, versionId, platform) {
+  let lastError;
+  for (let attempt = 0; attempt < SUBMIT_RETRY_MAX_ATTEMPTS; attempt++) {
+    try {
+      return await submitVersionForReview(account, appId, versionId, platform);
+    } catch (err) {
+      lastError = err;
+      if (!isNotReadyToSubmitError(err) || attempt === SUBMIT_RETRY_MAX_ATTEMPTS - 1) throw err;
+      await sleep(SUBMIT_RETRY_BASE_DELAY_MS * (attempt + 1));
+    }
+  }
+  throw lastError;
+}
+
+async function resubmitVersionForReview(account, appId, versionId, platform) {
+  await clearStuckReviewSubmissions(account, appId, platform);
+  await ensureBuildEncryptionCompliance(account, versionId);
+  return submitVersionForReviewWithRetry(account, appId, versionId, platform);
 }
 
 function invalidateSubmitCaches(appId, versionId) {
@@ -1243,36 +1416,39 @@ router.post("/:appId/versions/:versionId/submit", async (req, res) => {
     );
     const appStoreState = versionData.data.attributes.appStoreState;
 
-    if (appStoreState === "REJECTED") {
-      const submission = await findUnresolvedSubmissionForVersion(account, appId, versionId);
-      if (!submission) {
-        return res.status(404).json({
-          error: "No unresolved review submission found for this version",
-        });
-      }
-
-      await ascFetch(account, `/v1/reviewSubmissions/${submission.id}`, {
-        method: "PATCH",
-        body: {
-          data: {
-            type: "reviewSubmissions",
-            id: submission.id,
-            attributes: { submitted: true },
-          },
-        },
-      });
-
-      invalidateSubmitCaches(appId, versionId);
-      return res.json({ success: true, versionId, resubmitted: true });
-    }
-
-    if (appStoreState !== "PREPARE_FOR_SUBMISSION" && appStoreState !== "DEVELOPER_REJECTED") {
+    const editableStates = new Set(["PREPARE_FOR_SUBMISSION", "REJECTED", "DEVELOPER_REJECTED"]);
+    if (!editableStates.has(appStoreState)) {
       return res.status(409).json({
         error: `Version cannot be submitted from state: ${appStoreState}`,
       });
     }
 
-    await submitVersionForReview(account, appId, versionId, platform);
+    const unresolvedSubmission = await findUnresolvedSubmissionForVersion(account, appId, versionId);
+    const needsResubmit =
+      appStoreState === "REJECTED" ||
+      appStoreState === "DEVELOPER_REJECTED" ||
+      !!unresolvedSubmission;
+
+    if (needsResubmit) {
+      if (appStoreState === "REJECTED" && !unresolvedSubmission) {
+        return res.status(404).json({
+          error: "No unresolved review submission found for this version",
+        });
+      }
+
+      await resubmitVersionForReview(account, appId, versionId, platform);
+      invalidateSubmitCaches(appId, versionId);
+      return res.json({ success: true, versionId, resubmitted: true });
+    }
+
+    if (appStoreState !== "PREPARE_FOR_SUBMISSION") {
+      return res.status(409).json({
+        error: `Version cannot be submitted from state: ${appStoreState}`,
+      });
+    }
+
+    await ensureBuildEncryptionCompliance(account, versionId);
+    await submitVersionForReviewWithRetry(account, appId, versionId, platform);
     invalidateSubmitCaches(appId, versionId);
     res.json({ success: true, versionId });
   } catch (err) {

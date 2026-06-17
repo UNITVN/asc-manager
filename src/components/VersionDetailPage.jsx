@@ -145,7 +145,11 @@ export default function VersionDetailPage({ app, version, accounts, isMobile }) 
   }
 
   const v = detail || version;
-  const isResubmit = detail && (detail.appStoreState === "REJECTED" || detail.appStoreState === "DEVELOPER_REJECTED");
+  const isResubmit = detail && (
+    detail.appStoreState === "REJECTED" ||
+    detail.appStoreState === "DEVELOPER_REJECTED" ||
+    detail.hasUnresolvedSubmission
+  );
   const canSubmit = detail && SUBMITTABLE_STATES.has(detail.appStoreState) && attachedBuild;
   const canRelease = detail && RELEASABLE_STATES.has(detail.appStoreState);
 

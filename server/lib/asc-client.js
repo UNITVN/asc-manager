@@ -21,7 +21,9 @@ export async function ascFetch(account, path, options = {}) {
       if (parsed.errors?.[0]?.detail) {
         detail = parsed.errors[0].detail;
       }
-      const associatedErrors = parsed.errors?.[0]?.associated_errors;
+      const associatedErrors =
+        parsed.errors?.[0]?.associated_errors
+        ?? parsed.errors?.[0]?.meta?.associatedErrors;
       if (associatedErrors) {
         const details = Object.values(associatedErrors)
           .flat()

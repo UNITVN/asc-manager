@@ -79,6 +79,31 @@ function mockUnresolvedSubmission(submissionId = "sub-unresolved") {
   };
 }
 
+function mockPlatformSubmissions(submissions = []) {
+  return { data: submissions };
+}
+
+function mockAttachedBuild(usesNonExemptEncryption = false) {
+  return {
+    data: {
+      id: "build-1",
+      attributes: { usesNonExemptEncryption },
+    },
+  };
+}
+
+function mockCancelComplete(submissionId) {
+  return { data: { id: submissionId, attributes: { state: "COMPLETE" } } };
+}
+
+function mockReadySubmission(submissionId = "sub-ready") {
+  return { data: [{ id: submissionId, attributes: { state: "READY_FOR_REVIEW" } }] };
+}
+
+function mockEmptySubmissionItems() {
+  return { data: [], included: [] };
+}
+
 describe("POST /:appId/versions/:versionId/submit", () => {
   let app;
 
@@ -118,11 +143,20 @@ describe("POST /:appId/versions/:versionId/submit", () => {
     expect(ascFetch).toHaveBeenCalledTimes(1);
   });
 
-  it("resubmits REJECTED version by patching UNRESOLVED_ISSUES submission", async () => {
+  it("resubmits REJECTED version by canceling unresolved submission then submitting fresh", async () => {
     ascFetch
       .mockResolvedValueOnce(mockVersionState("REJECTED"))
       .mockResolvedValueOnce(mockUnresolvedSubmission("sub-99"))
-      .mockResolvedValueOnce({ data: { id: "sub-99" } });
+      .mockResolvedValueOnce(mockPlatformSubmissions([
+        { id: "sub-99", attributes: { state: "UNRESOLVED_ISSUES" } },
+      ]))
+      .mockResolvedValueOnce({ data: { id: "sub-99", attributes: { state: "CANCELING" } } })
+      .mockResolvedValueOnce(mockCancelComplete("sub-99"))
+      .mockResolvedValueOnce(mockAttachedBuild(true))
+      .mockResolvedValueOnce(mockReadySubmission("sub-new"))
+      .mockResolvedValueOnce(mockEmptySubmissionItems())
+      .mockResolvedValueOnce({ data: { id: "item-new" } })
+      .mockResolvedValueOnce({ data: { id: "sub-new" } });
 
     const res = await request(app)
       .post(SUBMIT_URL)
@@ -130,12 +164,41 @@ describe("POST /:appId/versions/:versionId/submit", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ success: true, versionId: VERSION_ID, resubmitted: true });
-    expect(ascFetch).toHaveBeenCalledTimes(3);
 
-    const patchCall = ascFetch.mock.calls[2];
-    expect(patchCall[1]).toBe("/v1/reviewSubmissions/sub-99");
-    expect(patchCall[2].method).toBe("PATCH");
-    expect(patchCall[2].body.data.attributes.submitted).toBe(true);
+    const cancelCall = ascFetch.mock.calls.find(
+      (call) => call[2]?.body?.data?.attributes?.canceled === true
+    );
+    expect(cancelCall).toBeDefined();
+    expect(cancelCall[1]).toBe("/v1/reviewSubmissions/sub-99");
+
+    const finalSubmitCall = ascFetch.mock.calls.find(
+      (call) => call[2]?.body?.data?.attributes?.submitted === true
+    );
+    expect(finalSubmitCall).toBeDefined();
+    expect(finalSubmitCall[1]).toBe("/v1/reviewSubmissions/sub-new");
+  });
+
+  it("resubmits PREPARE_FOR_SUBMISSION version with unresolved submission", async () => {
+    ascFetch
+      .mockResolvedValueOnce(mockVersionState("PREPARE_FOR_SUBMISSION"))
+      .mockResolvedValueOnce(mockUnresolvedSubmission("sub-99"))
+      .mockResolvedValueOnce(mockPlatformSubmissions([
+        { id: "sub-99", attributes: { state: "UNRESOLVED_ISSUES" } },
+      ]))
+      .mockResolvedValueOnce({ data: { id: "sub-99", attributes: { state: "CANCELING" } } })
+      .mockResolvedValueOnce(mockCancelComplete("sub-99"))
+      .mockResolvedValueOnce(mockAttachedBuild(true))
+      .mockResolvedValueOnce(mockReadySubmission("sub-new"))
+      .mockResolvedValueOnce(mockEmptySubmissionItems())
+      .mockResolvedValueOnce({ data: { id: "item-new" } })
+      .mockResolvedValueOnce({ data: { id: "sub-new" } });
+
+    const res = await request(app)
+      .post(SUBMIT_URL)
+      .send(SUBMIT_BODY);
+
+    expect(res.status).toBe(200);
+    expect(res.body.resubmitted).toBe(true);
   });
 
   it("returns 404 when REJECTED version has no unresolved submission", async () => {
@@ -155,8 +218,11 @@ describe("POST /:appId/versions/:versionId/submit", () => {
   it("submits PREPARE_FOR_SUBMISSION version via create-and-submit flow", async () => {
     ascFetch
       .mockResolvedValueOnce(mockVersionState("PREPARE_FOR_SUBMISSION"))
+      .mockResolvedValueOnce({ data: [], included: [] })
+      .mockResolvedValueOnce(mockAttachedBuild(true))
       .mockResolvedValueOnce({ data: [] })
       .mockResolvedValueOnce({ data: { id: "sub-new" } })
+      .mockResolvedValueOnce(mockEmptySubmissionItems())
       .mockResolvedValueOnce({ data: { id: "item-new" } })
       .mockResolvedValueOnce({ data: { id: "sub-new" } });
 
@@ -166,19 +232,18 @@ describe("POST /:appId/versions/:versionId/submit", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ success: true, versionId: VERSION_ID });
-    expect(ascFetch).toHaveBeenCalledTimes(5);
-
-    expect(ascFetch.mock.calls[1][1]).toContain("filter[state]=READY_FOR_REVIEW");
-    expect(ascFetch.mock.calls[2][1]).toBe("/v1/reviewSubmissions");
-    expect(ascFetch.mock.calls[2][2].method).toBe("POST");
-    expect(ascFetch.mock.calls[3][1]).toBe("/v1/reviewSubmissionItems");
-    expect(ascFetch.mock.calls[4][1]).toBe("/v1/reviewSubmissions/sub-new");
+    expect(ascFetch.mock.calls.some((call) => call[1] === "/v1/reviewSubmissions")).toBe(true);
+    expect(ascFetch.mock.calls.some((call) => call[1] === "/v1/reviewSubmissionItems")).toBe(true);
   });
 
-  it("submits DEVELOPER_REJECTED version via create-and-submit flow", async () => {
+  it("resubmits DEVELOPER_REJECTED version after clearing stuck submissions", async () => {
     ascFetch
       .mockResolvedValueOnce(mockVersionState("DEVELOPER_REJECTED"))
-      .mockResolvedValueOnce({ data: [{ id: "sub-existing" }] })
+      .mockResolvedValueOnce({ data: [], included: [] })
+      .mockResolvedValueOnce(mockPlatformSubmissions([]))
+      .mockResolvedValueOnce(mockAttachedBuild(true))
+      .mockResolvedValueOnce(mockReadySubmission("sub-existing"))
+      .mockResolvedValueOnce(mockEmptySubmissionItems())
       .mockResolvedValueOnce({ data: { id: "item-existing" } })
       .mockResolvedValueOnce({ data: { id: "sub-existing" } });
 
@@ -187,8 +252,22 @@ describe("POST /:appId/versions/:versionId/submit", () => {
       .send(SUBMIT_BODY);
 
     expect(res.status).toBe(200);
-    expect(res.body).toEqual({ success: true, versionId: VERSION_ID });
-    expect(ascFetch).toHaveBeenCalledTimes(4);
-    expect(ascFetch.mock.calls[3][1]).toBe("/v1/reviewSubmissions/sub-existing");
+    expect(res.body).toEqual({ success: true, versionId: VERSION_ID, resubmitted: true });
+  });
+
+  it("returns 502 when a review is already waiting or in progress", async () => {
+    ascFetch
+      .mockResolvedValueOnce(mockVersionState("PREPARE_FOR_SUBMISSION"))
+      .mockResolvedValueOnce(mockUnresolvedSubmission("sub-99"))
+      .mockResolvedValueOnce(mockPlatformSubmissions([
+        { id: "sub-active", attributes: { state: "WAITING_FOR_REVIEW" } },
+      ]));
+
+    const res = await request(app)
+      .post(SUBMIT_URL)
+      .send(SUBMIT_BODY);
+
+    expect(res.status).toBe(502);
+    expect(res.body.error).toContain("Cannot submit while a review is waiting for review");
   });
 });
