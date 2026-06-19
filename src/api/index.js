@@ -76,6 +76,19 @@ export async function releaseVersion(appId, versionId, accountId) {
   return res.json();
 }
 
+export async function rejectVersion(appId, versionId, accountId) {
+  const res = await fetch(`/api/apps/${appId}/versions/${versionId}/reject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ accountId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to reject version: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function fetchVersionDetail(appId, versionId, accountId) {
   const params = new URLSearchParams({ accountId });
   const res = await fetch(`/api/apps/${appId}/versions/${versionId}?${params}`);

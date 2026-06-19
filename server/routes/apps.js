@@ -1510,4 +1510,59 @@ router.post("/:appId/versions/:versionId/release", async (req, res) => {
   }
 });
 
+router.post("/:appId/versions/:versionId/reject", async (req, res) => {
+  const { appId, versionId } = req.params;
+  const { accountId } = req.body;
+
+  if (!accountId) {
+    return res.status(400).json({ error: "accountId is required" });
+  }
+
+  const accounts = getAccounts();
+  const account = accounts.find((a) => a.id === accountId);
+  if (!account) {
+    return res.status(400).json({ error: "Account not found" });
+  }
+
+  try {
+    const versionData = await ascFetch(
+      account,
+      `/v1/appStoreVersions/${versionId}?fields[appStoreVersions]=appStoreState`
+    );
+    const appStoreState = versionData.data.attributes.appStoreState;
+
+    if (appStoreState !== "PENDING_DEVELOPER_RELEASE") {
+      return res.status(409).json({
+        error: `Version cannot be rejected from state: ${appStoreState}`,
+      });
+    }
+
+    const submissionData = await ascFetch(
+      account,
+      `/v1/appStoreVersions/${versionId}?include=appStoreVersionSubmission`
+    );
+    const submissionRef = submissionData.data.relationships?.appStoreVersionSubmission?.data;
+    if (!submissionRef?.id) {
+      return res.status(409).json({ error: "No app store version submission found for this version" });
+    }
+
+    const submission = submissionData.included?.find(
+      (item) => item.type === "appStoreVersionSubmissions" && item.id === submissionRef.id
+    );
+    if (submission && submission.attributes?.canReject === false) {
+      return res.status(409).json({ error: "This version cannot be rejected" });
+    }
+
+    await ascFetch(account, `/v1/appStoreVersionSubmissions/${submissionRef.id}`, {
+      method: "DELETE",
+    });
+
+    invalidateSubmitCaches(appId, versionId);
+    res.json({ success: true, versionId });
+  } catch (err) {
+    console.error(`Failed to reject version ${versionId}:`, err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 export default router;

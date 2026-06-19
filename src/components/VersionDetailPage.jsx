@@ -10,6 +10,7 @@ import RatingResetSection from "./RatingResetSection.jsx";
 import ScreenshotsSection from "./ScreenshotsSection.jsx";
 import VersionLocalizationsSection from "./VersionLocalizationsSection.jsx";
 import ReleaseVersionButton from "./ReleaseVersionButton.jsx";
+import RejectVersionButton from "./RejectVersionButton.jsx";
 
 export default function VersionDetailPage({ app, version, accounts, isMobile }) {
   const [detail, setDetail] = useState(null);
@@ -235,8 +236,16 @@ export default function VersionDetailPage({ app, version, accounts, isMobile }) 
 
         {/* Release to App Store */}
         {canRelease && (
-          <div className="mt-6">
+          <div className="mt-6 flex flex-col gap-2">
             <ReleaseVersionButton
+              appId={app.id}
+              versionId={version.id}
+              accountId={app.accountId}
+              versionString={detail.versionString}
+              platform={detail.platform}
+              onSuccess={refreshDetail}
+            />
+            <RejectVersionButton
               appId={app.id}
               versionId={version.id}
               accountId={app.accountId}

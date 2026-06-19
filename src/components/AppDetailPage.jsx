@@ -6,6 +6,7 @@ import Badge from "./Badge.jsx";
 import AppReviewSection from "./AppReviewSection.jsx";
 import VersionHistory from "./VersionHistory.jsx";
 import ReleaseVersionButton from "./ReleaseVersionButton.jsx";
+import RejectVersionButton from "./RejectVersionButton.jsx";
 
 function StarRating({ rating }) {
   const stars = [];
@@ -137,14 +138,24 @@ export default function AppDetailPage({ app, accounts, isMobile, onSelectVersion
                 <p className="text-[12px] text-dark-dim m-0 mb-3">
                   This version has been approved and is waiting for you to release it to the App Store.
                 </p>
-                <ReleaseVersionButton
-                  appId={app.id}
-                  versionId={v.id}
-                  accountId={app.accountId}
-                  versionString={v.versionString}
-                  platform={v.platform}
-                  onSuccess={handleReleaseSuccess}
-                />
+                <div className="flex flex-col gap-2">
+                  <ReleaseVersionButton
+                    appId={app.id}
+                    versionId={v.id}
+                    accountId={app.accountId}
+                    versionString={v.versionString}
+                    platform={v.platform}
+                    onSuccess={handleReleaseSuccess}
+                  />
+                  <RejectVersionButton
+                    appId={app.id}
+                    versionId={v.id}
+                    accountId={app.accountId}
+                    versionString={v.versionString}
+                    platform={v.platform}
+                    onSuccess={handleReleaseSuccess}
+                  />
+                </div>
               </div>
             ))}
           </div>
