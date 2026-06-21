@@ -1,5 +1,5 @@
 /** Matches server-side ASC display adjustment for USD sales estimates. */
-export const ASC_DISPLAY_SALES_FACTOR = 0.97;
+export const ASC_DISPLAY_SALES_FACTOR = 0.945;
 
 /** @deprecated use ASC_DISPLAY_SALES_FACTOR */
 export const ASC_DISPLAY_PROCEEDS_FACTOR = ASC_DISPLAY_SALES_FACTOR;

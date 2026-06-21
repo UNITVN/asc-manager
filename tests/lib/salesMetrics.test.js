@@ -95,7 +95,7 @@ describe("estimateTotalProceedsUsd", () => {
 });
 
 describe("applyAscDisplaySalesAdjustment", () => {
-  it("reduces USD totals by 3% for display", () => {
-    expect(applyAscDisplaySalesAdjustment(1000)).toBe(970);
+  it("reduces USD totals by 5.5% for display", () => {
+    expect(applyAscDisplaySalesAdjustment(1000)).toBe(945);
   });
 });
