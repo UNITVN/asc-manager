@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
+  applyAscDisplaySalesAdjustment,
   estimateTotalProceedsUsd,
   primaryCurrency,
   sortProceedsByCurrency,
+  unknownProceedsCurrencies,
   usdEquivalent,
 } from "../../src/lib/salesMetrics.js";
 
@@ -60,6 +62,22 @@ describe("usdEquivalent", () => {
   it("converts VND using static FX map", () => {
     expect(usdEquivalent(25000, "VND")).toBeCloseTo(1, 5);
   });
+
+  it("returns 0 for unknown currencies instead of treating face value as USD", () => {
+    expect(usdEquivalent(14625.88, "KZT")).toBeCloseTo(30.47, 1);
+    expect(usdEquivalent(999, "XXX")).toBe(0);
+  });
+});
+
+describe("unknownProceedsCurrencies", () => {
+  it("lists currencies missing from the FX map", () => {
+    expect(
+      unknownProceedsCurrencies([
+        { currency: "USD", amount: 10 },
+        { currency: "XXX", amount: 5 },
+      ]),
+    ).toEqual(["XXX"]);
+  });
 });
 
 describe("estimateTotalProceedsUsd", () => {
@@ -73,5 +91,11 @@ describe("estimateTotalProceedsUsd", () => {
 
   it("returns 0 for empty proceeds", () => {
     expect(estimateTotalProceedsUsd([])).toBe(0);
+  });
+});
+
+describe("applyAscDisplaySalesAdjustment", () => {
+  it("reduces USD totals by 3% for display", () => {
+    expect(applyAscDisplaySalesAdjustment(1000)).toBe(970);
   });
 });

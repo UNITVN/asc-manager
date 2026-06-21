@@ -4,15 +4,15 @@ import AppIcon from "./AppIcon.jsx";
 import AnalyticsSidebar from "./AnalyticsSidebar.jsx";
 import SalesAnalytics from "./SalesAnalytics.jsx";
 import {
-  estimateTotalProceedsUsd,
+  applyAscDisplaySalesAdjustment,
   formatCurrency,
   formatDateRange,
   METRIC_OPTIONS,
-  sortProceedsByCurrency,
+  sortByCurrency,
 } from "../lib/salesMetrics.js";
 
 const RANGE_OPTIONS = [7, 30, 90];
-const SECTION_METRIC = { sales: "proceeds", downloads: "downloads" };
+const SECTION_METRIC = { sales: "sales", downloads: "downloads" };
 
 export default function AnalyticsPage({ app, isAdmin, isMobile }) {
   const [section, setSection] = useState("sales");
@@ -71,14 +71,17 @@ export default function AnalyticsPage({ app, isAdmin, isMobile }) {
   }
 
   const metric = SECTION_METRIC[section];
-  const proceedsByCurrency = sortProceedsByCurrency(data?.totals?.proceedsByCurrency ?? []);
-  const estimatedProceedsUsd = estimateTotalProceedsUsd(proceedsByCurrency);
-  const singleCurrencyProceeds = proceedsByCurrency.length === 1 ? proceedsByCurrency[0] : null;
-  const chartMetric = metric === "proceeds"
-    ? (singleCurrencyProceeds ? "proceeds" : "proceedsEstimatedUsd")
+  const salesByCurrency = sortByCurrency(data?.totals?.salesByCurrency ?? []);
+  const singleCurrencySales = salesByCurrency.length === 1 ? salesByCurrency[0] : null;
+  const usdSales = salesByCurrency.find((p) => p.currency === "USD");
+  const displaySalesUsd = data?.totals?.salesUsdDisplay ?? null;
+  const missingFxCurrencies = data?.fx?.unknownCurrencies ?? [];
+  const fxAsOf = data?.fx?.asOf;
+  const chartMetric = metric === "sales"
+    ? (singleCurrencySales ? "sales" : "salesEstimatedUsd")
     : metric;
-  const chartCurrency = metric === "proceeds"
-    ? (singleCurrencyProceeds?.currency ?? "USD")
+  const chartCurrency = metric === "sales"
+    ? (singleCurrencySales?.currency ?? "USD")
     : "USD";
   const metricLabel = METRIC_OPTIONS.find((m) => m.id === metric)?.label || "Sales";
   const dateRangeLabel = formatDateRange(data?.range?.from, data?.range?.to);
@@ -189,27 +192,44 @@ export default function AnalyticsPage({ app, isAdmin, isMobile }) {
 
           {!loading && !notConfigured && !error && data && (
             <div className="space-y-4">
-              {metric === "proceeds" && proceedsByCurrency.length > 0 && (
+              {metric === "sales" && salesByCurrency.length > 0 && (
                 <div className="bg-dark-surface rounded-xl border border-dark-border px-5 py-5">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-dark-dim m-0 mb-2">
-                    Total proceeds
+                    Total sales
                   </p>
                   <p className="text-[32px] font-bold text-dark-text m-0 leading-tight">
-                    {singleCurrencyProceeds
-                      ? formatCurrency(singleCurrencyProceeds.amount, singleCurrencyProceeds.currency)
-                      : formatCurrency(estimatedProceedsUsd, "USD")}
+                    {singleCurrencySales
+                      ? formatCurrency(
+                          singleCurrencySales.currency === "USD"
+                            ? applyAscDisplaySalesAdjustment(singleCurrencySales.amount)
+                            : singleCurrencySales.amount,
+                          singleCurrencySales.currency,
+                        )
+                      : formatCurrency(displaySalesUsd ?? 0, "USD")}
                   </p>
-                  {proceedsByCurrency.length > 1 && (
+                  {salesByCurrency.length > 1 && (
                     <p className="text-[11px] text-dark-phantom m-0 mt-2">
-                      Estimated USD total (approx. FX rates)
+                      Estimated USD total (customer price) using daily FX rates
+                      {fxAsOf ? ` (${fxAsOf})` : ""}, adjusted to approximate App Store Connect.
+                      {usdSales
+                        ? ` Native USD sales: ${formatCurrency(
+                            applyAscDisplaySalesAdjustment(usdSales.amount),
+                            "USD",
+                          )}.`
+                        : ""}
+                    </p>
+                  )}
+                  {missingFxCurrencies.length > 0 && (
+                    <p className="text-[11px] text-warning m-0 mt-1">
+                      Excluded from estimate (unknown FX): {missingFxCurrencies.join(", ")}
                     </p>
                   )}
                 </div>
               )}
 
-              {metric === "proceeds" && proceedsByCurrency.length === 0 && (
+              {metric === "sales" && salesByCurrency.length === 0 && (
                 <p className="text-[13px] text-dark-dim m-0 py-8 text-center">
-                  No proceeds for this period.
+                  No sales for this period.
                 </p>
               )}
 
@@ -224,7 +244,7 @@ export default function AnalyticsPage({ app, isAdmin, isMobile }) {
                 </div>
               )}
 
-              {(metric === "proceeds" && proceedsByCurrency.length > 0) || metric === "downloads" ? (
+              {(metric === "sales" && salesByCurrency.length > 0) || metric === "downloads" ? (
                 <SalesAnalytics
                   daily={data.daily}
                   totals={data.totals}

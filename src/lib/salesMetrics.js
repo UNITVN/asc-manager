@@ -1,8 +1,15 @@
+/** Matches server-side ASC display adjustment for USD sales estimates. */
+export const ASC_DISPLAY_SALES_FACTOR = 0.97;
+
+/** @deprecated use ASC_DISPLAY_SALES_FACTOR */
+export const ASC_DISPLAY_PROCEEDS_FACTOR = ASC_DISPLAY_SALES_FACTOR;
+
 export const METRIC_OPTIONS = [
-  { id: "proceeds", label: "Proceeds" },
+  { id: "sales", label: "Sales" },
   { id: "downloads", label: "Downloads" },
   { id: "updates", label: "Updates" },
   { id: "redownloads", label: "Re-downloads" },
+  { id: "proceeds", label: "Proceeds" },
 ];
 
 /** Approximate units of each currency per 1 USD — for ranking only, not billing. */
@@ -49,14 +56,24 @@ export const FX_UNITS_PER_USD = {
   BGN: 1.8,
   RON: 4.6,
   MYR: 4.7,
+  KZT: 480,
+  QAR: 3.64,
+  TZS: 2600,
 };
 
 const CHART_CURRENCY_PRIORITY = ["USD", "EUR", "GBP"];
 
 export function usdEquivalent(amount, currency) {
   const rate = FX_UNITS_PER_USD[currency];
-  if (!rate || rate <= 0) return amount;
+  if (!rate || rate <= 0) return 0;
   return amount / rate;
+}
+
+export function unknownProceedsCurrencies(proceedsByCurrency) {
+  if (!proceedsByCurrency?.length) return [];
+  return proceedsByCurrency
+    .filter((entry) => entry.amount && !FX_UNITS_PER_USD[entry.currency])
+    .map((entry) => entry.currency);
 }
 
 export function sortProceedsByCurrency(proceedsByCurrency) {
@@ -78,25 +95,49 @@ export function estimateTotalProceedsUsd(proceedsByCurrency) {
   return Math.round(total * 100) / 100;
 }
 
-export function estimateDayProceedsUsd(day) {
-  if (!day?.proceedsByCurrency?.length) return 0;
-  const total = day.proceedsByCurrency.reduce(
+export function sortByCurrency(amountsByCurrency) {
+  return sortProceedsByCurrency(amountsByCurrency);
+}
+
+export function amountForCurrency(amountsByCurrency, currency) {
+  return proceedsForCurrency(amountsByCurrency, currency);
+}
+
+/** Sum all sales converted to USD using static FX rates — fallback when server values absent. */
+export function estimateTotalSalesUsd(salesByCurrency) {
+  return estimateTotalProceedsUsd(salesByCurrency);
+}
+
+export function estimateDaySalesUsd(day) {
+  if (day?.salesUsdDisplay != null) return day.salesUsdDisplay;
+  if (!day?.salesByCurrency?.length) return 0;
+  const total = day.salesByCurrency.reduce(
     (sum, entry) => sum + usdEquivalent(entry.amount, entry.currency),
     0,
   );
-  return Math.round(total * 100) / 100;
+  return Math.round(total * ASC_DISPLAY_SALES_FACTOR * 100) / 100;
 }
 
-/** Default currency for the proceeds chart — USD when present, else highest USD-equivalent total. */
-export function primaryCurrency(proceedsByCurrency) {
-  if (!proceedsByCurrency?.length) return "USD";
+export function applyAscDisplaySalesAdjustment(usdAmount) {
+  const amount = Number(usdAmount) || 0;
+  return Math.round(amount * ASC_DISPLAY_SALES_FACTOR * 100) / 100;
+}
 
-  const currencies = proceedsByCurrency.map((entry) => entry.currency);
+/** @deprecated use applyAscDisplaySalesAdjustment */
+export function applyAscDisplayProceedsAdjustment(usdAmount) {
+  return applyAscDisplaySalesAdjustment(usdAmount);
+}
+
+/** Default currency for the sales chart — USD when present, else highest USD-equivalent total. */
+export function primaryCurrency(amountsByCurrency) {
+  if (!amountsByCurrency?.length) return "USD";
+
+  const currencies = amountsByCurrency.map((entry) => entry.currency);
   for (const preferred of CHART_CURRENCY_PRIORITY) {
     if (currencies.includes(preferred)) return preferred;
   }
 
-  return sortProceedsByCurrency(proceedsByCurrency)[0].currency;
+  return sortProceedsByCurrency(amountsByCurrency)[0].currency;
 }
 
 export function proceedsForCurrency(proceedsByCurrency, currency) {
@@ -157,8 +198,21 @@ export function formatDateRange(from, to) {
 }
 
 export function metricValue(day, metric, currency) {
+  if (metric === "salesEstimatedUsd") {
+    if (day?.salesUsdDisplay != null) return day.salesUsdDisplay;
+    return estimateDaySalesUsd(day);
+  }
   if (metric === "proceedsEstimatedUsd") {
-    return estimateDayProceedsUsd(day);
+    if (day?.proceedsUsdDisplay != null) return day.proceedsUsdDisplay;
+    if (!day?.proceedsByCurrency?.length) return 0;
+    const total = day.proceedsByCurrency.reduce(
+      (sum, entry) => sum + usdEquivalent(entry.amount, entry.currency),
+      0,
+    );
+    return Math.round(total * ASC_DISPLAY_SALES_FACTOR * 100) / 100;
+  }
+  if (metric === "sales") {
+    return amountForCurrency(day.salesByCurrency, currency);
   }
   if (metric === "proceeds") {
     return proceedsForCurrency(day.proceedsByCurrency, currency);
@@ -167,8 +221,16 @@ export function metricValue(day, metric, currency) {
 }
 
 export function totalMetricValue(totals, daily, metric, currency) {
+  if (metric === "salesEstimatedUsd") {
+    if (totals?.salesUsdDisplay != null) return totals.salesUsdDisplay;
+    return applyAscDisplaySalesAdjustment(estimateTotalSalesUsd(totals.salesByCurrency));
+  }
   if (metric === "proceedsEstimatedUsd") {
-    return estimateTotalProceedsUsd(totals.proceedsByCurrency);
+    if (totals?.proceedsUsdDisplay != null) return totals.proceedsUsdDisplay;
+    return applyAscDisplaySalesAdjustment(estimateTotalProceedsUsd(totals.proceedsByCurrency));
+  }
+  if (metric === "sales") {
+    return amountForCurrency(totals.salesByCurrency, currency);
   }
   if (metric === "proceeds") {
     return proceedsForCurrency(totals.proceedsByCurrency, currency);
@@ -176,16 +238,26 @@ export function totalMetricValue(totals, daily, metric, currency) {
   return daily.reduce((sum, day) => sum + (day[metric] ?? 0), 0);
 }
 
+function isCurrencyMetric(metric) {
+  return metric === "sales" || metric === "salesEstimatedUsd"
+    || metric === "proceeds" || metric === "proceedsEstimatedUsd";
+}
+
+function metricDisplayCurrency(metric, currency) {
+  if (metric === "salesEstimatedUsd" || metric === "proceedsEstimatedUsd") return "USD";
+  return currency;
+}
+
 export function formatMetricValue(value, metric, currency) {
-  if (metric === "proceeds" || metric === "proceedsEstimatedUsd") {
-    return formatCompactCurrency(value, metric === "proceedsEstimatedUsd" ? "USD" : currency);
+  if (isCurrencyMetric(metric)) {
+    return formatCompactCurrency(value, metricDisplayCurrency(metric, currency));
   }
   return value.toLocaleString();
 }
 
 export function formatMetricCell(value, metric, currency) {
-  if (metric === "proceeds" || metric === "proceedsEstimatedUsd") {
-    return formatCurrency(value, metric === "proceedsEstimatedUsd" ? "USD" : currency);
+  if (isCurrencyMetric(metric)) {
+    return formatCurrency(value, metricDisplayCurrency(metric, currency));
   }
   return value.toLocaleString();
 }
@@ -193,13 +265,13 @@ export function formatMetricCell(value, metric, currency) {
 /** Compact labels for chart axes — avoids clipping large currency/count values. */
 export function formatAxisMetricValue(value, metric, currency) {
   const rounded = Math.round(value);
-  const proceedsCurrency = metric === "proceedsEstimatedUsd" ? "USD" : currency;
+  const displayCurrency = metricDisplayCurrency(metric, currency);
 
-  if (metric === "proceeds" || metric === "proceedsEstimatedUsd") {
+  if (isCurrencyMetric(metric)) {
     if (rounded >= 1000) {
-      return formatCompactCurrency(rounded, proceedsCurrency);
+      return formatCompactCurrency(rounded, displayCurrency);
     }
-    return formatCurrency(rounded, proceedsCurrency).replace(/\.00$/, "");
+    return formatCurrency(rounded, displayCurrency).replace(/\.00$/, "");
   }
 
   if (rounded >= 10_000) {
@@ -225,7 +297,7 @@ export function computeChartNiceMax(max, metric) {
   else if (normalized <= 5) niceStep = 5 * magnitude;
   else niceStep = 10 * magnitude;
 
-  if (metric !== "proceeds" && metric !== "proceedsEstimatedUsd" && niceStep < 1) {
+  if (!isCurrencyMetric(metric) && niceStep < 1) {
     niceStep = 1;
   }
 
