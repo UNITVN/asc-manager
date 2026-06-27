@@ -736,3 +736,76 @@ export async function setVendorNumber(accountId, vendorNumber) {
   return res.json();
 }
 
+export async function fetchPublishedChangelogVersions(appId) {
+  const res = await fetch(`/api/apps/${appId}/changelog/published/versions`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch changelog versions: ${res.status}`);
+  }
+  const data = await res.json();
+  return data.versions || [];
+}
+
+export async function fetchPublishedChangelog(appId, version) {
+  const params = new URLSearchParams({ version });
+  const res = await fetch(`/api/apps/${appId}/changelog/published?${params}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch changelog: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchPublicChangelogMeta(appId) {
+  const res = await fetch(`/api/public/apps/${appId}/changelog/meta`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const error = new Error(err.error || `Changelog not found: ${res.status}`);
+    error.status = res.status;
+    throw error;
+  }
+  return res.json();
+}
+
+export async function fetchPublicPublishedChangelogVersions(appId) {
+  const res = await fetch(`/api/public/apps/${appId}/changelog/published/versions`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch changelog versions: ${res.status}`);
+  }
+  const data = await res.json();
+  return data.versions || [];
+}
+
+export async function fetchPublicPublishedChangelog(appId, version) {
+  const params = new URLSearchParams({ version });
+  const res = await fetch(`/api/public/apps/${appId}/changelog/published?${params}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch changelog: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchChangelogSettings(appId) {
+  const res = await fetch(`/api/apps/${appId}/changelog/settings`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch changelog settings: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function updateChangelogSettings(appId, { publicAccess, appName, bundleId }) {
+  const res = await fetch(`/api/apps/${appId}/changelog/settings`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ publicAccess, appName, bundleId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to update changelog settings: ${res.status}`);
+  }
+  return res.json();
+}
+

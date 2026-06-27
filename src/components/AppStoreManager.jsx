@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useIsMobile } from "../hooks/useIsMobile.js";
-import { fetchApps, fetchAccounts, createAccount, fetchVersions, fetchCiBuildRuns, fetchCurrentUser, setVendorNumber } from "../api/index.js";
+import { fetchApps, fetchAccounts, createAccount, fetchVersions, fetchCiBuildRuns, fetchCurrentUser, setVendorNumber, fetchPublicChangelogMeta } from "../api/index.js";
 import { STATUS_MAP } from "../constants/index.js";
 import TopBar from "./TopBar.jsx";
 import Sidebar from "./Sidebar.jsx";
@@ -11,6 +11,7 @@ import VersionDetailPage from "./VersionDetailPage.jsx";
 import ProductsPage from "./ProductsPage.jsx";
 import XcodeCloudPage from "./XcodeCloudPage.jsx";
 import AnalyticsPage from "./AnalyticsPage.jsx";
+import ChangelogPage from "./ChangelogPage.jsx";
 import BuildDetailPage from "./BuildDetailPage.jsx";
 import WorkflowEditPage from "./WorkflowEditPage.jsx";
 import ReviewSubmissionDetail from "./ReviewSubmissionDetail.jsx";
@@ -53,6 +54,8 @@ function getRouteFromPath() {
   if (xcodeCloudMatch) return { appId: xcodeCloudMatch[1], versionId: null, subPage: "xcode-cloud" };
   const analyticsMatch = path.match(/^\/app\/([^/]+)\/analytics$/);
   if (analyticsMatch) return { appId: analyticsMatch[1], versionId: null, subPage: "analytics" };
+  const changelogMatch = path.match(/^\/app\/([^/]+)\/changelog$/);
+  if (changelogMatch) return { appId: changelogMatch[1], versionId: null, subPage: "changelog" };
   const reviewMatch = path.match(/^\/app\/([^/]+)\/review\/([^/]+)$/);
   if (reviewMatch) return { appId: reviewMatch[1], versionId: null, subPage: "review", submissionId: reviewMatch[2] };
   const appMatch = path.match(/^\/app\/([^/]+)$/);
@@ -82,6 +85,8 @@ export default function AppStoreManager() {
   const [selectedVersion, setSelectedVersion] = useState(null);
   const [currentView, setCurrentView] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  const [isPublicChangelogView, setIsPublicChangelogView] = useState(false);
+  const [publicChangelogError, setPublicChangelogError] = useState(null);
 
   const selectApp = useCallback((app) => {
     setSelectedApp(app);
@@ -124,6 +129,13 @@ export default function AppStoreManager() {
     setSelectedVersion(null);
     setCurrentView("analytics");
     window.history.pushState({ appId: app.id, subPage: "analytics" }, "", `/app/${app.id}/analytics`);
+  }, []);
+
+  const navigateToChangelog = useCallback((app) => {
+    setSelectedApp(app);
+    setSelectedVersion(null);
+    setCurrentView("changelog");
+    window.history.pushState({ appId: app.id, subPage: "changelog" }, "", `/app/${app.id}/changelog`);
   }, []);
 
   const [selectedBuildRun, setSelectedBuildRun] = useState(null);
@@ -170,11 +182,38 @@ export default function AppStoreManager() {
   const loadData = useCallback(async (fresh = false) => {
     try {
       setError(null);
+      setPublicChangelogError(null);
+
+      const route = getRouteFromPath();
+      const token = window.__auth?.getToken?.();
+
+      if (route.subPage === "changelog" && !token && route.appId) {
+        try {
+          const meta = await fetchPublicChangelogMeta(route.appId);
+          setSelectedApp({
+            id: meta.id,
+            name: meta.name,
+            bundleId: meta.bundleId,
+            version: "",
+            accountId: "",
+          });
+          setCurrentView("changelog");
+          setIsPublicChangelogView(true);
+        } catch (err) {
+          setPublicChangelogError(err.message || "Changelog not available");
+          setCurrentView("public-changelog-error");
+          setSelectedApp(null);
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      setIsPublicChangelogView(false);
       const [accts, appsList] = await Promise.all([fetchAccounts(), fetchApps({ fresh })]);
       setAccounts(accts);
       setApps(appsList);
 
-      const route = getRouteFromPath();
       if (route.versionId) {
         const appMatch = appsList.find((a) => a.id === route.appId);
         if (appMatch) {
@@ -233,6 +272,12 @@ export default function AppStoreManager() {
           setSelectedApp(appMatch);
           setCurrentView("analytics");
         }
+      } else if (route.subPage === "changelog") {
+        const appMatch = appsList.find((a) => a.id === route.appId);
+        if (appMatch) {
+          setSelectedApp(appMatch);
+          setCurrentView("changelog");
+        }
       } else if (route.appId) {
         const match = appsList.find((a) => a.id === route.appId);
         if (match) {
@@ -259,6 +304,10 @@ export default function AppStoreManager() {
   }, [loadData]);
 
   useEffect(() => {
+    if (!window.__auth?.getToken?.()) {
+      setCurrentUser(null);
+      return;
+    }
     fetchCurrentUser()
       .then((data) => setCurrentUser(data.user))
       .catch(() => setCurrentUser(null));
@@ -356,6 +405,13 @@ export default function AppStoreManager() {
         const appMatch = apps.find((a) => a.id === route.appId);
         setSelectedApp(appMatch || null);
         setCurrentView(appMatch ? "analytics" : null);
+        return;
+      }
+
+      if (route.subPage === "changelog") {
+        const appMatch = apps.find((a) => a.id === route.appId);
+        setSelectedApp(appMatch || null);
+        setCurrentView(appMatch ? "changelog" : null);
         return;
       }
 
@@ -460,6 +516,32 @@ export default function AppStoreManager() {
     );
   }
 
+  if (currentView === "public-changelog-error") {
+    return (
+      <div className="font-sans bg-dark-bg text-dark-text min-h-screen antialiased flex items-center justify-center px-6">
+        <div className="text-center max-w-md">
+          <h1 className="text-lg font-bold text-dark-text mb-2">Changelog not available</h1>
+          <p className="text-sm text-dark-dim m-0">
+            {publicChangelogError || "This changelog is private or does not exist."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentView === "changelog" && selectedApp) {
+    return (
+      <div className="font-sans bg-dark-bg text-dark-text min-h-screen antialiased">
+        <ChangelogPage
+          app={selectedApp}
+          isAdmin={currentUser?.role === "admin"}
+          isMobile={isMobile}
+          isPublicView={isPublicChangelogView}
+        />
+      </div>
+    );
+  }
+
   if (currentView === "analytics" && selectedApp) {
     return (
       <div className="font-sans bg-dark-bg text-dark-text min-h-screen antialiased">
@@ -483,6 +565,7 @@ export default function AppStoreManager() {
           onViewProducts={() => navigateToProducts(selectedApp)}
           onViewXcodeCloud={() => navigateToXcodeCloud(selectedApp)}
           onViewAnalytics={() => navigateToAnalytics(selectedApp)}
+          onViewChangelog={() => navigateToChangelog(selectedApp)}
           onViewReviewDetail={(submissionId) => navigateToReviewDetail(submissionId, selectedApp)}
           onAppRefresh={refreshApps}
         />

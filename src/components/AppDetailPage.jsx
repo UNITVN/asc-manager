@@ -19,7 +19,7 @@ function StarRating({ rating }) {
   return <span className="text-warning tracking-wider">{stars.join("")}</span>;
 }
 
-export default function AppDetailPage({ app, accounts, isMobile, onSelectVersion, onViewProducts, onViewXcodeCloud, onViewAnalytics, onViewReviewDetail, onAppRefresh }) {
+export default function AppDetailPage({ app, accounts, isMobile, onSelectVersion, onViewProducts, onViewXcodeCloud, onViewAnalytics, onViewChangelog, onViewReviewDetail, onAppRefresh }) {
   const [lookupData, setLookupData] = useState(null);
   const [lookupLoading, setLookupLoading] = useState(true);
   const [descExpanded, setDescExpanded] = useState(false);
@@ -118,6 +118,14 @@ export default function AppDetailPage({ app, accounts, isMobile, onSelectVersion
                   className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-semibold bg-dark-surface text-dark-label border border-dark-border-light cursor-pointer font-sans"
                 >
                   Analytics
+                </button>
+              )}
+              {onViewChangelog && (
+                <button
+                  onClick={onViewChangelog}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-lg text-[12px] font-semibold bg-dark-surface text-dark-label border border-dark-border-light cursor-pointer font-sans"
+                >
+                  Changelog
                 </button>
               )}
             </div>
