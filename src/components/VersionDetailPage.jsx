@@ -244,6 +244,7 @@ export default function VersionDetailPage({ app, version, accounts, isMobile }) 
               versionString={detail.versionString}
               platform={detail.platform}
               onSuccess={refreshDetail}
+              isMobile={isMobile}
             />
             <RejectVersionButton
               appId={app.id}

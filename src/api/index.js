@@ -787,6 +787,15 @@ export async function fetchPublicPublishedChangelog(appId, version) {
   return res.json();
 }
 
+export async function fetchReleaseChecklist(appId) {
+  const res = await fetch(`/api/apps/${appId}/release-checklist`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch release checklist: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function fetchChangelogSettings(appId) {
   const res = await fetch(`/api/apps/${appId}/changelog/settings`);
   if (!res.ok) {

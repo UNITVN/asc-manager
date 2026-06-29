@@ -154,6 +154,7 @@ export default function AppDetailPage({ app, accounts, isMobile, onSelectVersion
                     versionString={v.versionString}
                     platform={v.platform}
                     onSuccess={handleReleaseSuccess}
+                    isMobile={isMobile}
                   />
                   <RejectVersionButton
                     appId={app.id}
