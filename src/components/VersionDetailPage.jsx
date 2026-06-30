@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { fetchVersionDetail, fetchVersionBuilds, fetchAttachedBuild, attachBuild, submitForReview } from "../api/index.js";
+import { fetchVersionDetail, fetchVersionBuilds, fetchAttachedBuild, attachBuild } from "../api/index.js";
 import { RELEASED_STATES, SUBMITTABLE_STATES, RELEASABLE_STATES } from "../constants/index.js";
 import Badge from "./Badge.jsx";
 import BuildSelector from "./BuildSelector.jsx";
@@ -11,6 +11,7 @@ import ScreenshotsSection from "./ScreenshotsSection.jsx";
 import VersionLocalizationsSection from "./VersionLocalizationsSection.jsx";
 import ReleaseVersionButton from "./ReleaseVersionButton.jsx";
 import RejectVersionButton from "./RejectVersionButton.jsx";
+import SubmitForReviewButton from "./SubmitForReviewButton.jsx";
 
 export default function VersionDetailPage({ app, version, accounts, isMobile }) {
   const [detail, setDetail] = useState(null);
@@ -26,9 +27,6 @@ export default function VersionDetailPage({ app, version, accounts, isMobile }) 
   const [attachingBuildId, setAttachingBuildId] = useState(null);
   const [attachError, setAttachError] = useState(null);
 
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState(null);
-  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
   const [complianceBuild, setComplianceBuild] = useState(null);
 
   const refreshDetail = useCallback(async () => {
@@ -114,20 +112,6 @@ export default function VersionDetailPage({ app, version, accounts, isMobile }) 
   function handleComplianceSuccess() {
     setComplianceBuild(null);
     refreshBuilds();
-  }
-
-  async function handleSubmitForReview() {
-    setSubmitting(true);
-    setSubmitError(null);
-    try {
-      await submitForReview(app.id, version.id, app.accountId, detail.platform);
-      setShowSubmitConfirm(false);
-      await refreshDetail();
-    } catch (err) {
-      setSubmitError(err.message);
-    } finally {
-      setSubmitting(false);
-    }
   }
 
   function formatDate(dateString) {
@@ -260,44 +244,16 @@ export default function VersionDetailPage({ app, version, accounts, isMobile }) 
         {/* Submit / Resubmit for Review */}
         {canSubmit && (
           <div className="mt-6">
-            {submitError && (
-              <div className="text-[11px] text-danger font-medium mb-3">{submitError}</div>
-            )}
-            {showSubmitConfirm ? (
-              <div className="border border-accent/30 bg-accent/5 rounded-[10px] px-4 py-3">
-                <div className="text-[13px] text-dark-text font-medium mb-1">
-                  {isResubmit ? "Resubmit" : "Submit"} version {v.versionString} for App Review?
-                </div>
-                <div className="text-[11px] text-dark-dim mb-3">
-                  {isResubmit
-                    ? "Make sure you have attached a new build and updated any metadata or screenshots before resubmitting. This will move the version to \"Waiting for Review\"."
-                    : "This will move the version to \"Waiting for Review\". This action cannot be undone."}
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleSubmitForReview}
-                    disabled={submitting}
-                    className="px-4 py-1.5 rounded-lg text-[12px] font-semibold bg-accent text-white border-none cursor-pointer font-sans hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {submitting ? (isResubmit ? "Resubmitting..." : "Submitting...") : (isResubmit ? "Confirm Resubmit" : "Confirm Submit")}
-                  </button>
-                  <button
-                    onClick={() => { setShowSubmitConfirm(false); setSubmitError(null); }}
-                    disabled={submitting}
-                    className="px-4 py-1.5 rounded-lg text-[12px] font-semibold bg-transparent text-dark-dim border border-dark-border cursor-pointer font-sans hover:bg-dark-surface transition-colors disabled:opacity-50"
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowSubmitConfirm(true)}
-                className="w-full px-4 py-3 rounded-[10px] text-[13px] font-semibold bg-accent text-white border-none cursor-pointer font-sans hover:brightness-110 transition-all"
-              >
-                {isResubmit ? "Resubmit for Review" : "Submit for Review"}
-              </button>
-            )}
+            <SubmitForReviewButton
+              appId={app.id}
+              versionId={version.id}
+              accountId={app.accountId}
+              versionString={detail.versionString}
+              platform={detail.platform}
+              isResubmit={isResubmit}
+              onSuccess={refreshDetail}
+              isMobile={isMobile}
+            />
           </div>
         )}
 

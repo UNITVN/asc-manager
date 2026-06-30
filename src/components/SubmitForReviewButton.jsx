@@ -1,16 +1,16 @@
-import { releaseVersion } from "../api/index.js";
+import { submitForReview, updateVersionRelease } from "../api/index.js";
 import useReleaseChecklistGate from "../hooks/useReleaseChecklistGate.js";
 import ReleaseChecklistModal from "./ReleaseChecklistModal.jsx";
 
-export default function ReleaseVersionButton({
+export default function SubmitForReviewButton({
   appId,
   versionId,
   accountId,
   versionString,
   platform,
+  isResubmit = false,
   onSuccess,
   isMobile = false,
-  className = "",
 }) {
   const gate = useReleaseChecklistGate(appId);
 
@@ -19,9 +19,16 @@ export default function ReleaseVersionButton({
     gate.setProcessing(true);
     gate.setError(null);
     try {
-      await releaseVersion(appId, versionId, accountId);
+      if (gate.hasChecklist) {
+        await updateVersionRelease(appId, versionId, {
+          accountId,
+          releaseType: "MANUAL",
+          earliestReleaseDate: null,
+        });
+      }
+      await submitForReview(appId, versionId, accountId, platform);
       gate.closeGate();
-      onSuccess?.();
+      await onSuccess?.();
     } catch (err) {
       gate.setError(err.message);
     } finally {
@@ -31,15 +38,15 @@ export default function ReleaseVersionButton({
 
   return (
     <>
-      <div className={className}>
-        <button
-          onClick={gate.openGate}
-          disabled={gate.loadingChecklist}
-          className="w-full px-4 py-3 rounded-[10px] text-[13px] font-semibold bg-accent text-white border-none cursor-pointer font-sans hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {gate.loadingChecklist ? "Loading..." : "Release This Version"}
-        </button>
-      </div>
+      <button
+        onClick={gate.openGate}
+        disabled={gate.loadingChecklist}
+        className="w-full px-4 py-3 rounded-[10px] text-[13px] font-semibold bg-accent text-white border-none cursor-pointer font-sans hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {gate.loadingChecklist
+          ? "Loading..."
+          : (isResubmit ? "Resubmit for Review" : "Submit for Review")}
+      </button>
 
       {gate.showModal && (
         <ReleaseChecklistModal
@@ -53,7 +60,8 @@ export default function ReleaseVersionButton({
           processing={gate.processing}
           error={gate.error}
           isMobile={isMobile}
-          mode="release"
+          mode="submit"
+          isResubmit={isResubmit}
         />
       )}
     </>

@@ -6,6 +6,31 @@ function formatPlatform(platform) {
   return platform;
 }
 
+const COPY = {
+  release: {
+    titleNoItems: "Release Version",
+    titleWithItems: "Release Checklist",
+    bodyWithItems: "Complete all items before releasing. Progress is not saved.",
+    bodyNoItems: (platformLabel, versionString) =>
+      `Release ${platformLabel} version ${versionString} to the App Store?`,
+    bodyNoItemsDetail:
+      "This will publish the approved version. It may take up to 24 hours to appear on the App Store.",
+    confirm: "Confirm Release",
+    processing: "Releasing...",
+  },
+  submit: {
+    titleNoItems: "Submit for Review",
+    titleWithItems: "Release Checklist",
+    bodyWithItems: "Complete all items before submitting. Progress is not saved.",
+    bodyNoItems: (platformLabel, versionString) =>
+      `Submit ${platformLabel} version ${versionString} for App Review?`,
+    bodyNoItemsDetail:
+      "This will move the version to \"Waiting for Review\". This action cannot be undone.",
+    confirm: "Confirm Submit",
+    processing: "Submitting...",
+  },
+};
+
 export default function ReleaseChecklistModal({
   items,
   versionString,
@@ -14,18 +39,25 @@ export default function ReleaseChecklistModal({
   onToggleItem,
   onClose,
   onConfirm,
-  releasing = false,
+  processing = false,
   error = null,
   isMobile,
+  mode = "release",
+  isResubmit = false,
 }) {
   const hasChecklist = items.length > 0;
   const completedCount = items.filter((item) => checkedIds.has(item.id)).length;
   const allComplete = !hasChecklist || completedCount === items.length;
   const platformLabel = formatPlatform(platform);
+  const copy = COPY[mode] || COPY.release;
+
+  const confirmLabel = processing
+    ? (isResubmit && mode === "submit" ? "Resubmitting..." : copy.processing)
+    : (isResubmit && mode === "submit" ? "Confirm Resubmit" : copy.confirm);
 
   return createPortal(
     <div
-      onClick={releasing ? undefined : onClose}
+      onClick={processing ? undefined : onClose}
       className={`fixed inset-0 bg-black/40 backdrop-blur-[8px] flex justify-center z-[100] ${isMobile ? "items-end" : "items-center"}`}
     >
       <div
@@ -40,7 +72,7 @@ export default function ReleaseChecklistModal({
         <div className="px-6 py-4 border-b border-dark-border flex items-center justify-between sticky top-0 bg-dark-card z-[1]">
           <div>
             <div className="text-[15px] font-bold text-dark-text">
-              {hasChecklist ? "Release Checklist" : "Release Version"}
+              {hasChecklist ? copy.titleWithItems : copy.titleNoItems}
             </div>
             <div className="text-[11px] text-dark-dim mt-0.5">
               {hasChecklist
@@ -50,7 +82,7 @@ export default function ReleaseChecklistModal({
           </div>
           <button
             onClick={onClose}
-            disabled={releasing}
+            disabled={processing}
             className="w-7 h-7 rounded-full bg-dark-surface flex items-center justify-center cursor-pointer border-none hover:bg-dark-hover transition-colors disabled:opacity-50"
           >
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#86868b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -64,7 +96,7 @@ export default function ReleaseChecklistModal({
           {hasChecklist ? (
             <>
               <p className="text-[12px] text-dark-dim mb-4 leading-relaxed">
-                Complete all items before releasing. Progress is not saved.
+                {copy.bodyWithItems}
               </p>
               <div className="space-y-2.5">
                 {items.map((item) => {
@@ -80,7 +112,7 @@ export default function ReleaseChecklistModal({
                         type="checkbox"
                         checked={checked}
                         onChange={() => onToggleItem(item.id)}
-                        disabled={releasing}
+                        disabled={processing}
                         className="w-4 h-4 accent-accent mt-0.5 shrink-0"
                       />
                       <div className="flex-1 min-w-0">
@@ -99,10 +131,10 @@ export default function ReleaseChecklistModal({
           ) : (
             <>
               <div className="text-[13px] text-dark-text font-medium mb-2">
-                Release {platformLabel} version {versionString} to the App Store?
+                {copy.bodyNoItems(platformLabel, versionString)}
               </div>
               <p className="text-[12px] text-dark-dim leading-relaxed">
-                This will publish the approved version. It may take up to 24 hours to appear on the App Store.
+                {copy.bodyNoItemsDetail}
               </p>
             </>
           )}
@@ -114,17 +146,17 @@ export default function ReleaseChecklistModal({
           <div className="flex justify-end gap-2 mt-5">
             <button
               onClick={onClose}
-              disabled={releasing}
+              disabled={processing}
               className="px-4 py-2 rounded-lg text-[12px] font-semibold text-dark-dim bg-dark-surface border border-dark-border cursor-pointer hover:bg-dark-hover transition-colors disabled:opacity-50"
             >
               Cancel
             </button>
             <button
               onClick={onConfirm}
-              disabled={releasing || !allComplete}
+              disabled={processing || !allComplete}
               className="px-4 py-2 rounded-lg text-[12px] font-semibold bg-accent text-white border-none cursor-pointer hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {releasing ? "Releasing..." : "Confirm Release"}
+              {confirmLabel}
             </button>
           </div>
         </div>
