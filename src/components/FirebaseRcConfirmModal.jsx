@@ -6,37 +6,42 @@ function formatPlatform(platform) {
   return platform;
 }
 
+function formatTarget(target) {
+  return target === "default" ? "Default" : target;
+}
+
 const COPY = {
   release: {
-    titleNoItems: "Release Version",
-    titleWithItems: "Release Checklist",
-    bodyWithItems: "Complete all items before releasing. Progress is not saved.",
+    title: "Release Version",
+    titleRc: "Remote Config Preview",
     bodyNoItems: (platformLabel, versionString) =>
       `Release ${platformLabel} version ${versionString} to the App Store?`,
     bodyNoItemsDetail:
       "This will publish the approved version. It may take up to 24 hours to appear on the App Store.",
+    rcWarning: "Remote Config will be updated before releasing this version.",
     confirm: "Confirm Release",
     processing: "Releasing...",
   },
   submit: {
-    titleNoItems: "Submit for Review",
-    titleWithItems: "Release Checklist",
-    bodyWithItems: "Complete all items before submitting. Progress is not saved.",
+    title: "Submit for Review",
+    titleRc: "Remote Config Preview",
     bodyNoItems: (platformLabel, versionString) =>
       `Submit ${platformLabel} version ${versionString} for App Review?`,
     bodyNoItemsDetail:
-      "This will move the version to \"Waiting for Review\". This action cannot be undone.",
+      'This will move the version to "Waiting for Review". This action cannot be undone.',
+    rcWarning: "Remote Config will be updated before submitting for review.",
     confirm: "Confirm Submit",
     processing: "Submitting...",
   },
 };
 
-export default function ReleaseChecklistModal({
-  items,
+export default function FirebaseRcConfirmModal({
+  configured,
+  changes,
+  noChanges,
+  projectId,
   versionString,
   platform,
-  checkedIds,
-  onToggleItem,
   onClose,
   onConfirm,
   processing = false,
@@ -45,15 +50,15 @@ export default function ReleaseChecklistModal({
   mode = "release",
   isResubmit = false,
 }) {
-  const hasChecklist = items.length > 0;
-  const completedCount = items.filter((item) => checkedIds.has(item.id)).length;
-  const allComplete = !hasChecklist || completedCount === items.length;
+  const hasRcChanges = configured && changes.length > 0;
   const platformLabel = formatPlatform(platform);
   const copy = COPY[mode] || COPY.release;
 
   const confirmLabel = processing
     ? (isResubmit && mode === "submit" ? "Resubmitting..." : copy.processing)
     : (isResubmit && mode === "submit" ? "Confirm Resubmit" : copy.confirm);
+
+  const title = configured ? copy.titleRc : copy.title;
 
   return createPortal(
     <div
@@ -66,17 +71,15 @@ export default function ReleaseChecklistModal({
         className={`bg-dark-card border border-dark-border-light w-full overflow-y-auto shadow-[0_32px_64px_rgba(0,0,0,0.15)] ${
           isMobile
             ? "rounded-t-2xl max-w-full max-h-[90vh]"
-            : "rounded-2xl max-w-[520px] max-h-[85vh]"
+            : "rounded-2xl max-w-[560px] max-h-[85vh]"
         }`}
       >
         <div className="px-6 py-4 border-b border-dark-border flex items-center justify-between sticky top-0 bg-dark-card z-[1]">
           <div>
-            <div className="text-[15px] font-bold text-dark-text">
-              {hasChecklist ? copy.titleWithItems : copy.titleNoItems}
-            </div>
+            <div className="text-[15px] font-bold text-dark-text">{title}</div>
             <div className="text-[11px] text-dark-dim mt-0.5">
-              {hasChecklist
-                ? `Version ${versionString} · ${completedCount} of ${items.length} completed`
+              {configured
+                ? `${platformLabel} v${versionString}${projectId ? ` · ${projectId}` : ""}`
                 : `${platformLabel} version ${versionString}`}
             </div>
           </div>
@@ -93,40 +96,43 @@ export default function ReleaseChecklistModal({
         </div>
 
         <div className={isMobile ? "px-4 py-4" : "px-6 py-5"}>
-          {hasChecklist ? (
+          {configured ? (
             <>
-              <p className="text-[12px] text-dark-dim mb-4 leading-relaxed">
-                {copy.bodyWithItems}
+              <p className="text-[12px] text-amber-400/90 mb-4 leading-relaxed font-medium">
+                {copy.rcWarning}
               </p>
-              <div className="space-y-2.5">
-                {items.map((item) => {
-                  const checked = checkedIds.has(item.id);
-                  return (
-                    <label
-                      key={item.id}
-                      className={`flex items-start gap-3 cursor-pointer rounded-[10px] px-4 py-3 transition-colors ${
-                        checked ? "bg-accent/10 border border-accent/20" : "bg-dark-surface hover:bg-dark-hover"
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => onToggleItem(item.id)}
-                        disabled={processing}
-                        className="w-4 h-4 accent-accent mt-0.5 shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className={`text-[13px] font-medium ${checked ? "text-dark-dim line-through" : "text-dark-text"}`}>
-                          {item.label}
-                        </div>
-                        {item.description && (
-                          <div className="text-[11px] text-dark-dim mt-1 leading-relaxed">{item.description}</div>
-                        )}
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
+              {hasRcChanges ? (
+                <div className="overflow-x-auto rounded-[10px] border border-dark-border">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="bg-dark-surface text-dark-dim text-left">
+                        <th className="px-3 py-2 font-semibold">Parameter</th>
+                        <th className="px-3 py-2 font-semibold">Target</th>
+                        <th className="px-3 py-2 font-semibold">Current</th>
+                        <th className="px-3 py-2 font-semibold">New</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {changes.map((change) => (
+                        <tr key={`${change.key}-${change.target}`} className="border-t border-dark-border">
+                          <td className="px-3 py-2 text-dark-text font-medium">{change.key}</td>
+                          <td className="px-3 py-2 text-dark-dim">{formatTarget(change.target)}</td>
+                          <td className="px-3 py-2 text-dark-dim font-mono text-[11px]">
+                            {change.currentValue ?? "—"}
+                          </td>
+                          <td className="px-3 py-2 text-accent font-mono text-[11px]">
+                            {change.resolvedValue ?? change.newValue}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-[12px] text-dark-dim leading-relaxed">
+                  Remote Config is configured but no parameter changes are needed for this action.
+                </p>
+              )}
             </>
           ) : (
             <>
@@ -153,7 +159,7 @@ export default function ReleaseChecklistModal({
             </button>
             <button
               onClick={onConfirm}
-              disabled={processing || !allComplete}
+              disabled={processing}
               className="px-4 py-2 rounded-lg text-[12px] font-semibold bg-accent text-white border-none cursor-pointer hover:brightness-110 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {confirmLabel}

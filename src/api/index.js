@@ -50,11 +50,11 @@ export async function createVersion(appId, accountId, versionString, platform) {
   return res.json();
 }
 
-export async function submitForReview(appId, versionId, accountId, platform) {
+export async function submitForReview(appId, versionId, accountId, platform, versionString) {
   const res = await fetch(`/api/apps/${appId}/versions/${versionId}/submit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ accountId, platform }),
+    body: JSON.stringify({ accountId, platform, versionString }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -63,11 +63,11 @@ export async function submitForReview(appId, versionId, accountId, platform) {
   return res.json();
 }
 
-export async function releaseVersion(appId, versionId, accountId) {
+export async function releaseVersion(appId, versionId, accountId, versionString) {
   const res = await fetch(`/api/apps/${appId}/versions/${versionId}/release`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ accountId }),
+    body: JSON.stringify({ accountId, versionString }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -787,11 +787,12 @@ export async function fetchPublicPublishedChangelog(appId, version) {
   return res.json();
 }
 
-export async function fetchReleaseChecklist(appId) {
-  const res = await fetch(`/api/apps/${appId}/release-checklist`);
+export async function fetchFirebaseRcPreview(appId, phase, versionString) {
+  const params = new URLSearchParams({ phase, versionString: versionString || "" });
+  const res = await fetch(`/api/apps/${appId}/firebase-rc/preview?${params}`);
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.error || `Failed to fetch release checklist: ${res.status}`);
+    throw new Error(err.error || `Failed to fetch Firebase RC preview: ${res.status}`);
   }
   return res.json();
 }

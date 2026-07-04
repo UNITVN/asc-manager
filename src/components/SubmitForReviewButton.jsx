@@ -1,6 +1,6 @@
-import { submitForReview, updateVersionRelease } from "../api/index.js";
-import useReleaseChecklistGate from "../hooks/useReleaseChecklistGate.js";
-import ReleaseChecklistModal from "./ReleaseChecklistModal.jsx";
+import { submitForReview } from "../api/index.js";
+import useFirebaseRcGate from "../hooks/useFirebaseRcGate.js";
+import FirebaseRcConfirmModal from "./FirebaseRcConfirmModal.jsx";
 
 export default function SubmitForReviewButton({
   appId,
@@ -12,21 +12,13 @@ export default function SubmitForReviewButton({
   onSuccess,
   isMobile = false,
 }) {
-  const gate = useReleaseChecklistGate(appId);
+  const gate = useFirebaseRcGate(appId, "submit", versionString);
 
   async function handleConfirm() {
-    if (!gate.isComplete()) return;
     gate.setProcessing(true);
     gate.setError(null);
     try {
-      if (gate.hasChecklist) {
-        await updateVersionRelease(appId, versionId, {
-          accountId,
-          releaseType: "MANUAL",
-          earliestReleaseDate: null,
-        });
-      }
-      await submitForReview(appId, versionId, accountId, platform);
+      await submitForReview(appId, versionId, accountId, platform, versionString);
       gate.closeGate();
       await onSuccess?.();
     } catch (err) {
@@ -40,21 +32,22 @@ export default function SubmitForReviewButton({
     <>
       <button
         onClick={gate.openGate}
-        disabled={gate.loadingChecklist}
+        disabled={gate.loadingPreview}
         className="w-full px-4 py-3 rounded-[10px] text-[13px] font-semibold bg-accent text-white border-none cursor-pointer font-sans hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        {gate.loadingChecklist
+        {gate.loadingPreview
           ? "Loading..."
           : (isResubmit ? "Resubmit for Review" : "Submit for Review")}
       </button>
 
       {gate.showModal && (
-        <ReleaseChecklistModal
-          items={gate.checklistItems}
+        <FirebaseRcConfirmModal
+          configured={gate.configured}
+          changes={gate.changes}
+          noChanges={gate.noChanges}
+          projectId={gate.projectId}
           versionString={versionString}
           platform={platform}
-          checkedIds={gate.checkedIds}
-          onToggleItem={gate.toggleItem}
           onClose={gate.closeGate}
           onConfirm={handleConfirm}
           processing={gate.processing}

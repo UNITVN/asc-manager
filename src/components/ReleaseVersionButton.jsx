@@ -1,6 +1,6 @@
 import { releaseVersion } from "../api/index.js";
-import useReleaseChecklistGate from "../hooks/useReleaseChecklistGate.js";
-import ReleaseChecklistModal from "./ReleaseChecklistModal.jsx";
+import useFirebaseRcGate from "../hooks/useFirebaseRcGate.js";
+import FirebaseRcConfirmModal from "./FirebaseRcConfirmModal.jsx";
 
 export default function ReleaseVersionButton({
   appId,
@@ -12,14 +12,13 @@ export default function ReleaseVersionButton({
   isMobile = false,
   className = "",
 }) {
-  const gate = useReleaseChecklistGate(appId);
+  const gate = useFirebaseRcGate(appId, "release", versionString);
 
   async function handleConfirm() {
-    if (!gate.isComplete()) return;
     gate.setProcessing(true);
     gate.setError(null);
     try {
-      await releaseVersion(appId, versionId, accountId);
+      await releaseVersion(appId, versionId, accountId, versionString);
       gate.closeGate();
       onSuccess?.();
     } catch (err) {
@@ -34,20 +33,21 @@ export default function ReleaseVersionButton({
       <div className={className}>
         <button
           onClick={gate.openGate}
-          disabled={gate.loadingChecklist}
+          disabled={gate.loadingPreview}
           className="w-full px-4 py-3 rounded-[10px] text-[13px] font-semibold bg-accent text-white border-none cursor-pointer font-sans hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {gate.loadingChecklist ? "Loading..." : "Release This Version"}
+          {gate.loadingPreview ? "Loading..." : "Release This Version"}
         </button>
       </div>
 
       {gate.showModal && (
-        <ReleaseChecklistModal
-          items={gate.checklistItems}
+        <FirebaseRcConfirmModal
+          configured={gate.configured}
+          changes={gate.changes}
+          noChanges={gate.noChanges}
+          projectId={gate.projectId}
           versionString={versionString}
           platform={platform}
-          checkedIds={gate.checkedIds}
-          onToggleItem={gate.toggleItem}
           onClose={gate.closeGate}
           onConfirm={handleConfirm}
           processing={gate.processing}
