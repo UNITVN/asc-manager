@@ -46,6 +46,8 @@ export default function ReleaseVersionButton({
           changes={gate.changes}
           noChanges={gate.noChanges}
           projectId={gate.projectId}
+          rules={gate.rules}
+          previewUnavailable={gate.previewUnavailable}
           versionString={versionString}
           platform={platform}
           onClose={gate.closeGate}

@@ -10,6 +10,22 @@ function formatTarget(target) {
   return target === "default" ? "Default" : target;
 }
 
+function formatValueType(valueType) {
+  const v = String(valueType || "STRING").toUpperCase();
+  if (v === "STRING") return "String";
+  if (v === "NUMBER") return "Number";
+  if (v === "BOOLEAN") return "Boolean";
+  if (v === "JSON") return "JSON";
+  return v;
+}
+
+function resolvePlaceholder(value, versionString) {
+  if (value == null) return "";
+  const raw = String(value);
+  if (!raw.includes("{{versionString}}")) return raw;
+  return raw.replaceAll("{{versionString}}", versionString || "");
+}
+
 const COPY = {
   release: {
     title: "Release Version",
@@ -21,6 +37,14 @@ const COPY = {
     rcWarning: "Remote Config will be updated before releasing this version.",
     confirm: "Confirm Release",
     processing: "Releasing...",
+    rulesHeading: "Configured Rules",
+    rulesSubheading: "These parameter values will be applied on confirm.",
+    valueHeading: "Release Value",
+    previewHeading: "Live Preview",
+    previewUnavailable:
+      "Live preview unavailable — rules will still apply on confirm.",
+    noRulesDetail:
+      "Remote Config is configured but no parameter rules are defined for this app.",
   },
   submit: {
     title: "Submit for Review",
@@ -32,6 +56,14 @@ const COPY = {
     rcWarning: "Remote Config will be updated before submitting for review.",
     confirm: "Confirm Submit",
     processing: "Submitting...",
+    rulesHeading: "Configured Rules",
+    rulesSubheading: "These parameter values will be applied on confirm.",
+    valueHeading: "Submit Value",
+    previewHeading: "Live Preview",
+    previewUnavailable:
+      "Live preview unavailable — rules will still apply on confirm.",
+    noRulesDetail:
+      "Remote Config is configured but no parameter rules are defined for this app.",
   },
 };
 
@@ -42,6 +74,8 @@ export default function FirebaseRcConfirmModal({
   projectId,
   versionString,
   platform,
+  rules = [],
+  previewUnavailable = false,
   onClose,
   onConfirm,
   processing = false,
@@ -51,14 +85,124 @@ export default function FirebaseRcConfirmModal({
   isResubmit = false,
 }) {
   const hasRcChanges = configured && changes.length > 0;
+  const hasRules = configured && rules.length > 0;
   const platformLabel = formatPlatform(platform);
   const copy = COPY[mode] || COPY.release;
+  const activeValueKey = mode === "submit" ? "submitValue" : "releaseValue";
 
   const confirmLabel = processing
     ? (isResubmit && mode === "submit" ? "Resubmitting..." : copy.processing)
     : (isResubmit && mode === "submit" ? "Confirm Resubmit" : copy.confirm);
 
   const title = configured ? copy.titleRc : copy.title;
+
+  function renderRules() {
+    if (!hasRules) {
+      return (
+        <p className="text-[12px] text-dark-dim leading-relaxed">
+          {copy.noRulesDetail}
+        </p>
+      );
+    }
+    return (
+      <div className="overflow-x-auto rounded-[10px] border border-dark-border">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="bg-dark-surface text-dark-dim text-left">
+              <th className="px-3 py-2 font-semibold">Parameter</th>
+              <th className="px-3 py-2 font-semibold">Target</th>
+              <th className="px-3 py-2 font-semibold">Type</th>
+              <th className="px-3 py-2 font-semibold">{copy.valueHeading}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rules.map((rule) => {
+              const rawValue = rule[activeValueKey] ?? "";
+              const resolved = resolvePlaceholder(rawValue, versionString);
+              const hasPlaceholder =
+                rawValue.includes("{{versionString}}") && versionString;
+              return (
+                <tr
+                  key={`${rule.key}-${rule.target}`}
+                  className="border-t border-dark-border"
+                >
+                  <td className="px-3 py-2 text-dark-text font-medium align-top">
+                    {rule.key}
+                    {rule.description ? (
+                      <div className="text-[10px] text-dark-dim font-normal mt-0.5 leading-snug">
+                        {rule.description}
+                      </div>
+                    ) : null}
+                  </td>
+                  <td className="px-3 py-2 text-dark-dim align-top">
+                    {formatTarget(rule.target)}
+                  </td>
+                  <td className="px-3 py-2 text-dark-dim align-top">
+                    {formatValueType(rule.valueType)}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <div className="text-accent font-mono text-[11px] break-all">
+                      {resolved || "—"}
+                    </div>
+                    {hasPlaceholder ? (
+                      <div className="text-[10px] text-dark-dim mt-0.5">
+                        ({rawValue})
+                      </div>
+                    ) : null}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
+
+  function renderLivePreview() {
+    if (previewUnavailable) {
+      return (
+        <div className="rounded-[10px] border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-[11px] text-amber-400/90 leading-relaxed">
+          {copy.previewUnavailable}
+        </div>
+      );
+    }
+    if (!hasRcChanges) {
+      return (
+        <p className="text-[12px] text-dark-dim leading-relaxed">
+          Remote Config is configured but no parameter changes are needed for this action.
+        </p>
+      );
+    }
+    return (
+      <div className="overflow-x-auto rounded-[10px] border border-dark-border">
+        <table className="w-full text-[12px]">
+          <thead>
+            <tr className="bg-dark-surface text-dark-dim text-left">
+              <th className="px-3 py-2 font-semibold">Parameter</th>
+              <th className="px-3 py-2 font-semibold">Target</th>
+              <th className="px-3 py-2 font-semibold">Current</th>
+              <th className="px-3 py-2 font-semibold">New</th>
+            </tr>
+          </thead>
+          <tbody>
+            {changes.map((change) => (
+              <tr key={`${change.key}-${change.target}`} className="border-t border-dark-border">
+                <td className="px-3 py-2 text-dark-text font-medium">{change.key}</td>
+                <td className="px-3 py-2 text-dark-dim">{formatTarget(change.target)}</td>
+                <td className="px-3 py-2 text-dark-dim font-mono text-[11px]">
+                  {change.currentValue ?? "—"}
+                </td>
+                <td className="px-3 py-2 text-accent font-mono text-[11px]">
+                  {change.resolvedValue ?? change.newValue}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  }
 
   return createPortal(
     <div
@@ -101,38 +245,23 @@ export default function FirebaseRcConfirmModal({
               <p className="text-[12px] text-amber-400/90 mb-4 leading-relaxed font-medium">
                 {copy.rcWarning}
               </p>
-              {hasRcChanges ? (
-                <div className="overflow-x-auto rounded-[10px] border border-dark-border">
-                  <table className="w-full text-[12px]">
-                    <thead>
-                      <tr className="bg-dark-surface text-dark-dim text-left">
-                        <th className="px-3 py-2 font-semibold">Parameter</th>
-                        <th className="px-3 py-2 font-semibold">Target</th>
-                        <th className="px-3 py-2 font-semibold">Current</th>
-                        <th className="px-3 py-2 font-semibold">New</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {changes.map((change) => (
-                        <tr key={`${change.key}-${change.target}`} className="border-t border-dark-border">
-                          <td className="px-3 py-2 text-dark-text font-medium">{change.key}</td>
-                          <td className="px-3 py-2 text-dark-dim">{formatTarget(change.target)}</td>
-                          <td className="px-3 py-2 text-dark-dim font-mono text-[11px]">
-                            {change.currentValue ?? "—"}
-                          </td>
-                          <td className="px-3 py-2 text-accent font-mono text-[11px]">
-                            {change.resolvedValue ?? change.newValue}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+
+              <div className="mb-4">
+                <div className="text-[12px] font-semibold text-dark-text mb-1">
+                  {copy.rulesHeading}
                 </div>
-              ) : (
-                <p className="text-[12px] text-dark-dim leading-relaxed">
-                  Remote Config is configured but no parameter changes are needed for this action.
-                </p>
-              )}
+                <div className="text-[11px] text-dark-dim mb-2">
+                  {copy.rulesSubheading}
+                </div>
+                {renderRules()}
+              </div>
+
+              <div className="mb-2">
+                <div className="text-[12px] font-semibold text-dark-text mb-1">
+                  {copy.previewHeading}
+                </div>
+                {renderLivePreview()}
+              </div>
             </>
           ) : (
             <>

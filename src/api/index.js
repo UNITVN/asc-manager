@@ -787,6 +787,15 @@ export async function fetchPublicPublishedChangelog(appId, version) {
   return res.json();
 }
 
+export async function fetchFirebaseRcConfig(appId) {
+  const res = await fetch(`/api/apps/${appId}/firebase-rc/config`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch Firebase RC config: ${res.status}`);
+  }
+  return res.json();
+}
+
 export async function fetchFirebaseRcPreview(appId, phase, versionString) {
   const params = new URLSearchParams({ phase, versionString: versionString || "" });
   const res = await fetch(`/api/apps/${appId}/firebase-rc/preview?${params}`);
