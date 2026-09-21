@@ -50,64 +50,109 @@ describe("isAppCurrentlyOnSale", () => {
   });
 
   it("returns false when all territories are Apple-blocked", async () => {
-    ascFetch.mockResolvedValueOnce({
-      data: { id: "avail-1", type: "appAvailabilities" },
-      included: [
-        {
-          type: "territoryAvailabilities",
-          id: "ta-1",
-          attributes: { available: true, contentStatuses: ["CANNOT_SELL"] },
-        },
-        {
-          type: "territoryAvailabilities",
-          id: "ta-2",
-          attributes: { available: true, contentStatuses: ["CANNOT_SELL"] },
-        },
-      ],
-    });
+    ascFetch
+      .mockResolvedValueOnce({
+        data: { id: "avail-1", type: "appAvailabilities" },
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            type: "territoryAvailabilities",
+            id: "ta-1",
+            attributes: { available: true, contentStatuses: ["CANNOT_SELL"] },
+          },
+          {
+            type: "territoryAvailabilities",
+            id: "ta-2",
+            attributes: { available: true, contentStatuses: ["CANNOT_SELL"] },
+          },
+        ],
+        links: {},
+      });
 
     expect(await isAppCurrentlyOnSale(account, "app-1")).toBe(false);
-    expect(ascFetch).toHaveBeenCalledTimes(1);
+    expect(ascFetch).toHaveBeenCalledTimes(2);
+    expect(ascFetch.mock.calls[1][1]).toContain("limit=50");
   });
 
   it("returns false when all territories are developer-removed", async () => {
-    ascFetch.mockResolvedValueOnce({
-      data: { id: "avail-1", type: "appAvailabilities" },
-      included: [
-        {
-          type: "territoryAvailabilities",
-          id: "ta-1",
-          attributes: { available: false, contentStatuses: [] },
-        },
-        {
-          type: "territoryAvailabilities",
-          id: "ta-2",
-          attributes: { available: false, contentStatuses: [] },
-        },
-      ],
-    });
+    ascFetch
+      .mockResolvedValueOnce({
+        data: { id: "avail-1", type: "appAvailabilities" },
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            type: "territoryAvailabilities",
+            id: "ta-1",
+            attributes: { available: false, contentStatuses: [] },
+          },
+          {
+            type: "territoryAvailabilities",
+            id: "ta-2",
+            attributes: { available: false, contentStatuses: [] },
+          },
+        ],
+        links: {},
+      });
 
     expect(await isAppCurrentlyOnSale(account, "app-1")).toBe(false);
   });
 
   it("returns true when at least one territory is selling", async () => {
-    ascFetch.mockResolvedValueOnce({
-      data: { id: "avail-1", type: "appAvailabilities" },
-      included: [
-        {
-          type: "territoryAvailabilities",
-          id: "ta-1",
-          attributes: { available: true, contentStatuses: ["CANNOT_SELL"] },
-        },
-        {
-          type: "territoryAvailabilities",
-          id: "ta-2",
-          attributes: { available: true, contentStatuses: ["AVAILABLE"] },
-        },
-      ],
-    });
+    ascFetch
+      .mockResolvedValueOnce({
+        data: { id: "avail-1", type: "appAvailabilities" },
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            type: "territoryAvailabilities",
+            id: "ta-1",
+            attributes: { available: true, contentStatuses: ["CANNOT_SELL"] },
+          },
+          {
+            type: "territoryAvailabilities",
+            id: "ta-2",
+            attributes: { available: true, contentStatuses: ["AVAILABLE"] },
+          },
+        ],
+        links: {},
+      });
 
     expect(await isAppCurrentlyOnSale(account, "app-1")).toBe(true);
+  });
+
+  it("paginates territory availabilities across pages", async () => {
+    ascFetch
+      .mockResolvedValueOnce({
+        data: { id: "avail-1", type: "appAvailabilities" },
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            type: "territoryAvailabilities",
+            id: "ta-1",
+            attributes: { available: true, contentStatuses: ["CANNOT_SELL"] },
+          },
+        ],
+        links: {
+          next: "https://api.appstoreconnect.apple.com/v2/appAvailabilities/avail-1/territoryAvailabilities?cursor=page2",
+        },
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            type: "territoryAvailabilities",
+            id: "ta-2",
+            attributes: { available: true, contentStatuses: ["AVAILABLE"] },
+          },
+        ],
+        links: {},
+      });
+
+    expect(await isAppCurrentlyOnSale(account, "app-1")).toBe(true);
+    expect(ascFetch).toHaveBeenCalledTimes(3);
   });
 
   it("returns false when app availability is missing", async () => {
@@ -137,14 +182,33 @@ describe("isAppCurrentlyOnSale", () => {
   });
 
   it("returns false when availability exists but has no territories", async () => {
-    ascFetch.mockResolvedValueOnce({
-      data: { id: "avail-1", type: "appAvailabilities" },
-      included: [],
-    });
-    ascFetch.mockResolvedValueOnce({
-      data: [],
-      links: {},
-    });
+    ascFetch
+      .mockResolvedValueOnce({
+        data: { id: "avail-1", type: "appAvailabilities" },
+      })
+      .mockResolvedValueOnce({
+        data: [],
+        links: {},
+      });
+
+    expect(await isAppCurrentlyOnSale(account, "app-1")).toBe(false);
+  });
+
+  it("returns false when territories are processing to not available", async () => {
+    ascFetch
+      .mockResolvedValueOnce({
+        data: { id: "avail-1", type: "appAvailabilities" },
+      })
+      .mockResolvedValueOnce({
+        data: [
+          {
+            type: "territoryAvailabilities",
+            id: "ta-1",
+            attributes: { available: true, contentStatuses: ["PROCESSING_TO_NOT_AVAILABLE"] },
+          },
+        ],
+        links: {},
+      });
 
     expect(await isAppCurrentlyOnSale(account, "app-1")).toBe(false);
   });

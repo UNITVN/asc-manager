@@ -3,6 +3,9 @@ import { ascFetch } from "./asc-client.js";
 /** Version states that may still show as live while the app is off sale. */
 export const LIVE_VERSION_STATES = new Set(["READY_FOR_SALE", "READY_FOR_DISTRIBUTION"]);
 
+/** ASC caps territoryAvailabilities page size at 50. */
+const TERRITORY_PAGE_LIMIT = 50;
+
 const SELLING_CONTENT_STATUSES = new Set([
   "AVAILABLE",
   "PROCESSING_TO_AVAILABLE",
@@ -11,6 +14,10 @@ const SELLING_CONTENT_STATUSES = new Set([
   "AVAILABLE_FOR_SALE_UNRELEASED_APP",
   "PREORDER_ON_UNRELEASED_APP",
   "AVAILABLE_FOR_PREORDER",
+]);
+
+const NOT_SELLING_CONTENT_STATUSES = new Set([
+  "PROCESSING_TO_NOT_AVAILABLE",
 ]);
 
 function isNotFoundError(err) {
@@ -27,20 +34,18 @@ export function territoryIsSelling(attrs) {
   if (statuses.some((s) => s === "CANNOT_SELL" || s.startsWith("CANNOT_SELL_"))) {
     return false;
   }
+  if (statuses.some((s) => NOT_SELLING_CONTENT_STATUSES.has(s))) {
+    return false;
+  }
   if (statuses.some((s) => SELLING_CONTENT_STATUSES.has(s))) {
     return true;
   }
   return attrs?.available === true;
 }
 
-function territoryAvailabilitiesFromIncluded(included) {
-  if (!Array.isArray(included)) return [];
-  return included.filter((item) => item.type === "territoryAvailabilities");
-}
-
 async function fetchAllTerritoryAvailabilities(account, availabilityId) {
   const territories = [];
-  let nextPath = `/v2/appAvailabilities/${availabilityId}/territoryAvailabilities?limit=200&fields[territoryAvailabilities]=available,contentStatuses`;
+  let nextPath = `/v2/appAvailabilities/${availabilityId}/territoryAvailabilities?limit=${TERRITORY_PAGE_LIMIT}&fields[territoryAvailabilities]=available,contentStatuses`;
 
   while (nextPath) {
     const data = await ascFetch(account, nextPath);
@@ -63,7 +68,7 @@ export async function isAppCurrentlyOnSale(account, appId) {
   try {
     const availabilityData = await ascFetch(
       account,
-      `/v1/apps/${appId}/appAvailabilityV2?include=territoryAvailabilities&fields[territoryAvailabilities]=available,contentStatuses&limit[territoryAvailabilities]=200`
+      `/v1/apps/${appId}/appAvailabilityV2`
     );
 
     const availability = availabilityData?.data;
@@ -71,11 +76,7 @@ export async function isAppCurrentlyOnSale(account, appId) {
       return false;
     }
 
-    let territoryRecords = territoryAvailabilitiesFromIncluded(availabilityData.included);
-    if (territoryRecords.length === 0) {
-      territoryRecords = await fetchAllTerritoryAvailabilities(account, availability.id);
-    }
-
+    const territoryRecords = await fetchAllTerritoryAvailabilities(account, availability.id);
     if (territoryRecords.length === 0) {
       return false;
     }
