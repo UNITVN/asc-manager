@@ -1,7 +1,22 @@
 import { ascFetch } from "./asc-client.js";
 
-/** Version states that may still show as live while the app is off sale. */
-export const LIVE_VERSION_STATES = new Set(["READY_FOR_SALE", "READY_FOR_DISTRIBUTION"]);
+/** Pre-release workflow states where version status is still meaningful. */
+export const SKIP_SALE_CHECK_STATES = new Set([
+  "PREPARE_FOR_SUBMISSION",
+  "WAITING_FOR_REVIEW",
+  "IN_REVIEW",
+  "READY_FOR_REVIEW",
+  "REJECTED",
+  "DEVELOPER_REJECTED",
+  "METADATA_REJECTED",
+  "INVALID_BINARY",
+  "WAITING_FOR_EXPORT_COMPLIANCE",
+]);
+
+/** Whether the apps list should verify territory availability for this version state. */
+export function shouldCheckSaleStatus(status) {
+  return status && !SKIP_SALE_CHECK_STATES.has(status) && status !== "REMOVED_FROM_SALE";
+}
 
 /** ASC caps territoryAvailabilities page size at 50. */
 const TERRITORY_PAGE_LIMIT = 50;

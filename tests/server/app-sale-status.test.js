@@ -8,9 +8,24 @@ import { ascFetch } from "../../server/lib/asc-client.js";
 import {
   territoryIsSelling,
   isAppCurrentlyOnSale,
+  shouldCheckSaleStatus,
 } from "../../server/lib/app-sale-status.js";
 
 const account = { id: "acc-1", name: "Test Account" };
+
+describe("shouldCheckSaleStatus", () => {
+  it("checks post-approval states like PENDING_DEVELOPER_RELEASE", () => {
+    expect(shouldCheckSaleStatus("PENDING_DEVELOPER_RELEASE")).toBe(true);
+    expect(shouldCheckSaleStatus("READY_FOR_SALE")).toBe(true);
+    expect(shouldCheckSaleStatus("READY_FOR_DISTRIBUTION")).toBe(true);
+  });
+
+  it("skips pre-release workflow and already-removed states", () => {
+    expect(shouldCheckSaleStatus("PREPARE_FOR_SUBMISSION")).toBe(false);
+    expect(shouldCheckSaleStatus("IN_REVIEW")).toBe(false);
+    expect(shouldCheckSaleStatus("REMOVED_FROM_SALE")).toBe(false);
+  });
+});
 
 describe("territoryIsSelling", () => {
   it("returns false when Apple blocks sale with CANNOT_SELL", () => {

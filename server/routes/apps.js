@@ -2,7 +2,7 @@ import { Router } from "express";
 import { getAccounts } from "../lib/account-store.js";
 import { ascFetch } from "../lib/asc-client.js";
 import { apiCache } from "../lib/cache.js";
-import { isAppCurrentlyOnSale, LIVE_VERSION_STATES } from "../lib/app-sale-status.js";
+import { isAppCurrentlyOnSale, shouldCheckSaleStatus } from "../lib/app-sale-status.js";
 
 const router = Router();
 const iconCache = new Map();
@@ -63,7 +63,7 @@ router.get("/", async (req, res) => {
   const accountsMap = new Map(accounts.map((a) => [a.id, a]));
   await Promise.allSettled(
     allApps.map(async (app) => {
-      if (!LIVE_VERSION_STATES.has(app.status)) return;
+      if (!shouldCheckSaleStatus(app.status)) return;
       const account = accountsMap.get(app.accountId);
       if (!account) return;
       try {
