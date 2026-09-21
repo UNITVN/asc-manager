@@ -2,6 +2,7 @@ import { Router } from "express";
 import { getAccounts } from "../lib/account-store.js";
 import { ascFetch } from "../lib/asc-client.js";
 import { apiCache } from "../lib/cache.js";
+import { isAppCurrentlyOnSale, LIVE_VERSION_STATES } from "../lib/app-sale-status.js";
 
 const router = Router();
 const iconCache = new Map();
@@ -59,6 +60,23 @@ router.get("/", async (req, res) => {
     }
   }
 
+  const accountsMap = new Map(accounts.map((a) => [a.id, a]));
+  await Promise.allSettled(
+    allApps.map(async (app) => {
+      if (!LIVE_VERSION_STATES.has(app.status)) return;
+      const account = accountsMap.get(app.accountId);
+      if (!account) return;
+      try {
+        const onSale = await isAppCurrentlyOnSale(account, app.id);
+        if (onSale === false) {
+          app.status = "REMOVED_FROM_SALE";
+        }
+      } catch (err) {
+        console.error(`Failed to resolve sale status for ${app.name} (${app.id}):`, err.message);
+      }
+    })
+  );
+
   // Fetch icon URLs from iTunes Lookup API
   const uncachedApps = allApps.filter((app) => {
     if (iconCache.has(app.bundleId)) {
@@ -92,8 +110,6 @@ router.get("/", async (req, res) => {
   // (e.g., apps not yet published, or only available in non-US stores)
   const appsWithoutIcon = allApps.filter((app) => !app.iconUrl);
   if (appsWithoutIcon.length > 0) {
-    const accountsMap = new Map(accounts.map((a) => [a.id, a]));
-
     await Promise.allSettled(
       appsWithoutIcon.map(async (app) => {
         try {
