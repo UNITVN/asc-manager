@@ -13,9 +13,22 @@ export const SKIP_SALE_CHECK_STATES = new Set([
   "WAITING_FOR_EXPORT_COMPLIANCE",
 ]);
 
+/**
+ * Skip states that should still become Removed when the app was published before
+ * but is no longer on sale (e.g. new draft version after Apple removal).
+ */
+export const OFF_SALE_OVERRIDE_SKIP_STATES = new Set([
+  "PREPARE_FOR_SUBMISSION",
+]);
+
 /** Whether the apps list should verify territory availability for this version state. */
 export function shouldCheckSaleStatus(status) {
   return status && !SKIP_SALE_CHECK_STATES.has(status) && status !== "REMOVED_FROM_SALE";
+}
+
+/** Whether the apps list should fetch availability for this version state. */
+export function needsSaleStatusLookup(status) {
+  return shouldCheckSaleStatus(status) || OFF_SALE_OVERRIDE_SKIP_STATES.has(status);
 }
 
 /** ASC caps territoryAvailabilities page size at 50. */
@@ -76,10 +89,9 @@ async function fetchAllTerritoryAvailabilities(account, availabilityId) {
 }
 
 /**
- * Whether an app is currently on sale in at least one territory.
- * @returns {Promise<boolean|null>} true/false when known; null on API error
+ * @returns {Promise<{ onSale: boolean, hasAvailability: boolean }>}
  */
-export async function isAppCurrentlyOnSale(account, appId) {
+export async function getAppSaleStatus(account, appId) {
   try {
     const availabilityData = await ascFetch(
       account,
@@ -88,19 +100,49 @@ export async function isAppCurrentlyOnSale(account, appId) {
 
     const availability = availabilityData?.data;
     if (!availability?.id) {
-      return false;
+      return { onSale: false, hasAvailability: false };
     }
 
     const territoryRecords = await fetchAllTerritoryAvailabilities(account, availability.id);
     if (territoryRecords.length === 0) {
-      return false;
+      return { onSale: false, hasAvailability: true };
     }
 
-    return territoryRecords.some((record) => territoryIsSelling(record.attributes));
+    return {
+      onSale: territoryRecords.some((record) => territoryIsSelling(record.attributes)),
+      hasAvailability: true,
+    };
   } catch (err) {
     if (isNotFoundError(err)) {
-      return false;
+      return { onSale: false, hasAvailability: false };
     }
     throw err;
   }
+}
+
+/**
+ * Map version workflow state + territory availability to the apps-list badge.
+ * @param {string} versionStatus
+ * @param {{ onSale: boolean, hasAvailability: boolean }} sale
+ */
+export function resolveAppListStatus(versionStatus, sale) {
+  if (versionStatus === "REMOVED_FROM_SALE" || sale.onSale) {
+    return versionStatus;
+  }
+  if (shouldCheckSaleStatus(versionStatus)) {
+    return "REMOVED_FROM_SALE";
+  }
+  if (OFF_SALE_OVERRIDE_SKIP_STATES.has(versionStatus) && sale.hasAvailability) {
+    return "REMOVED_FROM_SALE";
+  }
+  return versionStatus;
+}
+
+/**
+ * Whether an app is currently on sale in at least one territory.
+ * @returns {Promise<boolean>}
+ */
+export async function isAppCurrentlyOnSale(account, appId) {
+  const sale = await getAppSaleStatus(account, appId);
+  return sale.onSale;
 }

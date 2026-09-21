@@ -2,7 +2,7 @@ import { Router } from "express";
 import { getAccounts } from "../lib/account-store.js";
 import { ascFetch } from "../lib/asc-client.js";
 import { apiCache } from "../lib/cache.js";
-import { isAppCurrentlyOnSale, shouldCheckSaleStatus } from "../lib/app-sale-status.js";
+import { getAppSaleStatus, needsSaleStatusLookup, resolveAppListStatus } from "../lib/app-sale-status.js";
 
 const router = Router();
 const iconCache = new Map();
@@ -63,14 +63,12 @@ router.get("/", async (req, res) => {
   const accountsMap = new Map(accounts.map((a) => [a.id, a]));
   await Promise.allSettled(
     allApps.map(async (app) => {
-      if (!shouldCheckSaleStatus(app.status)) return;
+      if (!needsSaleStatusLookup(app.status)) return;
       const account = accountsMap.get(app.accountId);
       if (!account) return;
       try {
-        const onSale = await isAppCurrentlyOnSale(account, app.id);
-        if (onSale === false) {
-          app.status = "REMOVED_FROM_SALE";
-        }
+        const sale = await getAppSaleStatus(account, app.id);
+        app.status = resolveAppListStatus(app.status, sale);
       } catch (err) {
         console.error(`Failed to resolve sale status for ${app.name} (${app.id}):`, err.message);
       }
