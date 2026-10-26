@@ -15,6 +15,9 @@ export async function ascFetch(account, path, options = {}) {
   const res = await fetch(url, fetchOptions);
   if (!res.ok) {
     const body = await res.text();
+    if (options.method && options.method !== "GET") {
+      console.error(`[asc] ${options.method} ${path} -> ${res.status}: ${body}`);
+    }
     let detail = `ASC API ${res.status}: ${body}`;
     try {
       const parsed = JSON.parse(body);
@@ -27,14 +30,16 @@ export async function ascFetch(account, path, options = {}) {
       if (associatedErrors) {
         const details = Object.values(associatedErrors)
           .flat()
-          .map(e => e.detail)
+          .map(e => e.detail || e.title)
           .filter(Boolean);
         if (details.length > 0) {
           detail += ": " + details.join("; ");
         }
       }
     } catch {}
-    throw new Error(detail);
+    const error = new Error(detail);
+    error.status = res.status;
+    throw error;
   }
   if (res.status === 204 || res.headers.get("content-length") === "0") {
     return null;

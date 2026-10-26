@@ -8,6 +8,7 @@ import {
   productsRouter,
   xcodeCloudRouter,
   pricingRouter,
+  introOffersRouter,
   screenshotsRouter,
 } from "./routes/index.js";
 
@@ -22,6 +23,7 @@ app.use("/api/accounts", accountsRouter);
 app.use("/api/apps", appsRouter);
 app.use("/api/apps", productsRouter);
 app.use("/api/apps", pricingRouter);
+app.use("/api/apps", introOffersRouter);
 app.use("/api/apps", xcodeCloudRouter);
 app.use("/api/apps", screenshotsRouter);
 

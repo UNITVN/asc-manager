@@ -47,6 +47,7 @@ export const ACCT_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#a78bfa", "#ef4444
 export const IAP_STATUS_MAP = {
   MISSING_METADATA: { label: "Missing Metadata", color: "#ff9500", bg: "rgba(255,149,0,0.12)" },
   READY_TO_SUBMIT: { label: "Ready to Submit", color: "#007aff", bg: "rgba(0,122,255,0.12)" },
+  ADDED_TO_REVIEW: { label: "Added to Review", color: "#5856d6", bg: "rgba(88,86,214,0.12)" },
   WAITING_FOR_REVIEW: { label: "Waiting for Review", color: "#ff9500", bg: "rgba(255,149,0,0.12)" },
   IN_REVIEW: { label: "In Review", color: "#af52de", bg: "rgba(175,82,222,0.12)" },
   APPROVED: { label: "Approved", color: "#34c759", bg: "rgba(52,199,89,0.12)" },

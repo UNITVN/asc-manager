@@ -447,6 +447,26 @@ export async function deleteSubscription(appId, groupId, subId, accountId) {
   return res.json();
 }
 
+export async function submitSubscription(appId, groupId, subId, accountId) {
+  const params = new URLSearchParams({ accountId });
+  const res = await fetch(`/api/apps/${appId}/subscription-groups/${groupId}/subscriptions/${subId}/submit?${params}`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to submit subscription: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function submitSubscriptionGroup(appId, groupId, accountId) {
+  const params = new URLSearchParams({ accountId });
+  const res = await fetch(`/api/apps/${appId}/subscription-groups/${groupId}/submit?${params}`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to submit subscription group: ${res.status}`);
+  }
+  return res.json();
+}
+
 // ── Subscription Localizations ───────────────────────────────────────────────
 
 export async function fetchSubscriptionLocalizations(appId, groupId, subId, accountId) {
@@ -532,6 +552,60 @@ export async function fetchSubscriptionPricePoints(appId, groupId, subId, territ
   const params = new URLSearchParams({ territory, accountId });
   const res = await fetch(`/api/apps/${appId}/subscription-groups/${groupId}/subscriptions/${subId}/price-points?${params}`);
   if (!res.ok) throw new Error(`Failed to fetch subscription price points: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchIAPEqualizations(appId, iapId, pricePointId, accountId) {
+  const params = new URLSearchParams({ accountId });
+  const res = await fetch(`/api/apps/${appId}/iap/${iapId}/price-points/${encodeURIComponent(pricePointId)}/equalizations?${params}`);
+  if (!res.ok) throw new Error(`Failed to fetch IAP equalizations: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchSubscriptionEqualizations(appId, groupId, subId, pricePointId, accountId) {
+  const params = new URLSearchParams({ accountId });
+  const res = await fetch(`/api/apps/${appId}/subscription-groups/${groupId}/subscriptions/${subId}/price-points/${encodeURIComponent(pricePointId)}/equalizations?${params}`);
+  if (!res.ok) throw new Error(`Failed to fetch subscription equalizations: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchIAPAvailability(appId, iapId, accountId) {
+  const params = new URLSearchParams({ accountId });
+  const res = await fetch(`/api/apps/${appId}/iap/${iapId}/availability?${params}`);
+  if (!res.ok) throw new Error(`Failed to fetch IAP availability: ${res.status}`);
+  return res.json();
+}
+
+export async function setIAPAvailability(appId, iapId, { accountId, territories, availableInNewTerritories }) {
+  const res = await fetch(`/api/apps/${appId}/iap/${iapId}/availability`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ accountId, territories, availableInNewTerritories }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to set IAP availability: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function fetchSubscriptionAvailability(appId, groupId, subId, accountId) {
+  const params = new URLSearchParams({ accountId });
+  const res = await fetch(`/api/apps/${appId}/subscription-groups/${groupId}/subscriptions/${subId}/availability?${params}`);
+  if (!res.ok) throw new Error(`Failed to fetch subscription availability: ${res.status}`);
+  return res.json();
+}
+
+export async function setSubscriptionAvailability(appId, groupId, subId, { accountId, territories, availableInNewTerritories }) {
+  const res = await fetch(`/api/apps/${appId}/subscription-groups/${groupId}/subscriptions/${subId}/availability`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ accountId, territories, availableInNewTerritories }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to set subscription availability: ${res.status}`);
+  }
   return res.json();
 }
 
@@ -828,3 +902,86 @@ export async function updateChangelogSettings(appId, { publicAccess, appName, bu
   return res.json();
 }
 
+// ── Subscription review screenshot ───────────────────────────────────────────
+
+export async function fetchSubscriptionReviewScreenshot(appId, groupId, subId, accountId) {
+  const params = new URLSearchParams({ accountId });
+  const res = await fetch(`/api/apps/${appId}/subscription-groups/${groupId}/subscriptions/${subId}/review-screenshot?${params}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch review screenshot: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function uploadSubscriptionReviewScreenshot(appId, groupId, subId, accountId, file) {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("accountId", accountId);
+  const res = await fetch(`/api/apps/${appId}/subscription-groups/${groupId}/subscriptions/${subId}/review-screenshot`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to upload review screenshot: ${res.status}`);
+  }
+  return res.json();
+}
+
+export async function deleteSubscriptionReviewScreenshot(appId, groupId, subId, accountId) {
+  const params = new URLSearchParams({ accountId });
+  const res = await fetch(`/api/apps/${appId}/subscription-groups/${groupId}/subscriptions/${subId}/review-screenshot?${params}`, { method: "DELETE" });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to delete review screenshot: ${res.status}`);
+  }
+  return res.json();
+}
+
+// ── Subscription group localizations ─────────────────────────────────────────
+
+async function groupLocRequest(url, options, fallback) {
+  const res = await fetch(url, options);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `${fallback}: ${res.status}`);
+  }
+  return res.json();
+}
+
+export function fetchSubscriptionGroupLocalizations(appId, groupId, accountId) {
+  const params = new URLSearchParams({ accountId });
+  return groupLocRequest(`/api/apps/${appId}/subscription-groups/${groupId}/localizations?${params}`, undefined, "Failed to fetch group localizations");
+}
+
+export function createSubscriptionGroupLocalization(appId, groupId, { accountId, locale, name, customAppName }) {
+  return groupLocRequest(`/api/apps/${appId}/subscription-groups/${groupId}/localizations`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ accountId, locale, name, customAppName }),
+  }, "Failed to create group localization");
+}
+
+export function updateSubscriptionGroupLocalization(appId, groupId, locId, { accountId, name, customAppName }) {
+  return groupLocRequest(`/api/apps/${appId}/subscription-groups/${groupId}/localizations/${locId}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ accountId, name, customAppName }),
+  }, "Failed to update group localization");
+}
+
+export function deleteSubscriptionGroupLocalization(appId, groupId, locId, accountId) {
+  const params = new URLSearchParams({ accountId });
+  return groupLocRequest(`/api/apps/${appId}/subscription-groups/${groupId}/localizations/${locId}?${params}`, { method: "DELETE" }, "Failed to delete group localization");
+}
+
+export async function fetchReviewDraft(appId, accountId) {
+  const params = new URLSearchParams({ accountId });
+  const res = await fetch(`/api/apps/${appId}/review-draft?${params}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err.error || `Failed to fetch review draft: ${res.status}`);
+  }
+  return res.json();
+}

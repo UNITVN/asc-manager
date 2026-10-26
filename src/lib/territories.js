@@ -2,13 +2,10 @@
 // Source: Apple App Store Connect API territory list.
 
 export const TERRITORIES = [
-  { code: "ABW", name: "Aruba", currency: "USD" },
   { code: "AFG", name: "Afghanistan", currency: "USD" },
   { code: "AGO", name: "Angola", currency: "USD" },
   { code: "AIA", name: "Anguilla", currency: "USD" },
   { code: "ALB", name: "Albania", currency: "USD" },
-  { code: "AND", name: "Andorra", currency: "EUR" },
-  { code: "ANT", name: "Netherlands Antilles", currency: "USD" },
   { code: "ARE", name: "United Arab Emirates", currency: "AED" },
   { code: "ARG", name: "Argentina", currency: "USD" },
   { code: "ARM", name: "Armenia", currency: "USD" },
@@ -19,7 +16,6 @@ export const TERRITORIES = [
   { code: "BEL", name: "Belgium", currency: "EUR" },
   { code: "BEN", name: "Benin", currency: "USD" },
   { code: "BFA", name: "Burkina Faso", currency: "USD" },
-  { code: "BGD", name: "Bangladesh", currency: "USD" },
   { code: "BGR", name: "Bulgaria", currency: "BGN" },
   { code: "BHR", name: "Bahrain", currency: "USD" },
   { code: "BHS", name: "Bahamas", currency: "USD" },
@@ -33,7 +29,6 @@ export const TERRITORIES = [
   { code: "BRN", name: "Brunei", currency: "USD" },
   { code: "BTN", name: "Bhutan", currency: "USD" },
   { code: "BWA", name: "Botswana", currency: "USD" },
-  { code: "CAF", name: "Central African Republic", currency: "USD" },
   { code: "CAN", name: "Canada", currency: "CAD" },
   { code: "CHE", name: "Switzerland", currency: "CHF" },
   { code: "CHL", name: "Chile", currency: "CLP" },
@@ -57,7 +52,6 @@ export const TERRITORIES = [
   { code: "EGY", name: "Egypt", currency: "EGP" },
   { code: "ESP", name: "Spain", currency: "EUR" },
   { code: "EST", name: "Estonia", currency: "EUR" },
-  { code: "ETH", name: "Ethiopia", currency: "USD" },
   { code: "FIN", name: "Finland", currency: "EUR" },
   { code: "FJI", name: "Fiji", currency: "USD" },
   { code: "FRA", name: "France", currency: "EUR" },
@@ -66,7 +60,6 @@ export const TERRITORIES = [
   { code: "GBR", name: "United Kingdom", currency: "GBP" },
   { code: "GEO", name: "Georgia", currency: "USD" },
   { code: "GHA", name: "Ghana", currency: "USD" },
-  { code: "GIN", name: "Guinea", currency: "USD" },
   { code: "GMB", name: "Gambia", currency: "USD" },
   { code: "GNB", name: "Guinea-Bissau", currency: "USD" },
   { code: "GRC", name: "Greece", currency: "EUR" },
@@ -140,7 +133,6 @@ export const TERRITORIES = [
   { code: "POL", name: "Poland", currency: "PLN" },
   { code: "PRT", name: "Portugal", currency: "EUR" },
   { code: "PRY", name: "Paraguay", currency: "USD" },
-  { code: "PSE", name: "Palestinian Authority", currency: "USD" },
   { code: "QAT", name: "Qatar", currency: "QAR" },
   { code: "ROU", name: "Romania", currency: "RON" },
   { code: "RUS", name: "Russia", currency: "RUB" },
@@ -161,7 +153,6 @@ export const TERRITORIES = [
   { code: "SYC", name: "Seychelles", currency: "USD" },
   { code: "TCA", name: "Turks and Caicos", currency: "USD" },
   { code: "TCD", name: "Chad", currency: "USD" },
-  { code: "TGO", name: "Togo", currency: "USD" },
   { code: "THA", name: "Thailand", currency: "THB" },
   { code: "TJK", name: "Tajikistan", currency: "USD" },
   { code: "TKM", name: "Turkmenistan", currency: "USD" },
@@ -185,6 +176,7 @@ export const TERRITORIES = [
   { code: "ZAF", name: "South Africa", currency: "ZAR" },
   { code: "ZMB", name: "Zambia", currency: "USD" },
   { code: "ZWE", name: "Zimbabwe", currency: "USD" },
+  { code: "XKS", name: "Kosovo", currency: "EUR" },
 ];
 
 export const TERRITORY_MAP = new Map(TERRITORIES.map((t) => [t.code, t]));

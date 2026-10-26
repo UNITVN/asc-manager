@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { fetchSubscriptions } from "../api/index.js";
+import { fetchSubscriptions, submitSubscription, submitSubscriptionGroup } from "../api/index.js";
 import { SUBSCRIPTION_PERIODS } from "../constants/index.js";
 import StatusDot from "./StatusDot.jsx";
 
@@ -10,6 +10,7 @@ export default function SubscriptionGroupSection({
   onEditGroup, onDeleteGroup,
   onAddSub, onEditSub, onDeleteSub,
   refreshKey,
+  draftItems = [], onDraftChanged,
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const [subs, setSubs] = useState([]);
@@ -17,6 +18,11 @@ export default function SubscriptionGroupSection({
   const [error, setError] = useState(null);
   const [confirmId, setConfirmId] = useState(null);
   const [confirmGroupDelete, setConfirmGroupDelete] = useState(false);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [confirmSubmitId, setConfirmSubmitId] = useState(null); // sub id, or "group"
+  const [submittingId, setSubmittingId] = useState(null);
+  const [submitError, setSubmitError] = useState(null);
+  const [submitNote, setSubmitNote] = useState(null);
 
   useEffect(() => {
     if (collapsed) return;
@@ -28,7 +34,36 @@ export default function SubscriptionGroupSection({
       .catch((err) => { if (!cancelled) setError(err.message); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [collapsed, appId, group.id, accountId, refreshKey]);
+  }, [collapsed, appId, group.id, accountId, refreshKey, reloadKey]);
+
+  // Two-step confirm (submitting for review can't be taken back from here)
+  async function handleSubmit(id) {
+    if (confirmSubmitId !== id) {
+      setConfirmSubmitId(id);
+      setTimeout(() => setConfirmSubmitId((prev) => (prev === id ? null : prev)), 3000);
+      return;
+    }
+    setConfirmSubmitId(null);
+    setSubmittingId(id);
+    setSubmitError(null);
+    setSubmitNote(null);
+    try {
+      if (id === "group") await submitSubscriptionGroup(appId, group.id, accountId);
+      else await submitSubscription(appId, group.id, id, accountId);
+      setSubmitNote("Added to the draft submission. Submit it together with the app version.");
+      setReloadKey((k) => k + 1);
+      onDraftChanged?.();
+    } catch (err) {
+      setSubmitError(err.message);
+    } finally {
+      setSubmittingId(null);
+    }
+  }
+
+  const draftSubIds = new Set(draftItems.filter((i) => i.kind === "subscription").map((i) => i.id));
+  const groupInDraft = draftItems.some((i) => i.kind === "group" && i.id === group.id);
+  const hasPendingReady = subs.some((s) => s.state === "READY_TO_SUBMIT" && !draftSubIds.has(s.id));
+  const showGroupAdd = !groupInDraft || hasPendingReady;
 
   function handleDeleteSub(sub) {
     if (confirmId === sub.id) {
@@ -70,6 +105,17 @@ export default function SubscriptionGroupSection({
           >
             + Sub
           </button>
+          {showGroupAdd ? (
+            <button
+              onClick={() => handleSubmit("group")}
+              disabled={submittingId === "group"}
+              className="text-[11px] font-semibold text-accent bg-transparent border-none cursor-pointer font-sans px-0 hover:underline disabled:opacity-50"
+            >
+              {submittingId === "group" ? "Adding..." : confirmSubmitId === "group" ? "Confirm?" : "Add to review"}
+            </button>
+          ) : (
+            <StatusDot status="ADDED_TO_REVIEW" />
+          )}
           <button
             onClick={() => onEditGroup(group)}
             className="text-[11px] font-semibold text-accent bg-transparent border-none cursor-pointer font-sans px-0 hover:underline"
@@ -86,6 +132,13 @@ export default function SubscriptionGroupSection({
           </button>
         </div>
       </div>
+
+      {submitNote && (
+        <div className="text-[11px] text-green-400 font-medium mt-2">{submitNote}</div>
+      )}
+      {submitError && (
+        <div className="text-[11px] text-danger font-medium mt-2">{submitError}</div>
+      )}
 
       {/* Expanded content */}
       {!collapsed && (
@@ -122,7 +175,16 @@ export default function SubscriptionGroupSection({
                   </div>
                 </div>
                 <div className="flex items-center gap-3 shrink-0">
-                  <StatusDot status={sub.state} />
+                  <StatusDot status={draftSubIds.has(sub.id) ? "ADDED_TO_REVIEW" : sub.state} />
+                  {sub.state === "READY_TO_SUBMIT" && !draftSubIds.has(sub.id) && (
+                    <button
+                      onClick={() => handleSubmit(sub.id)}
+                      disabled={submittingId === sub.id}
+                      className="text-[11px] font-semibold text-accent bg-transparent border-none cursor-pointer font-sans px-0 hover:underline disabled:opacity-50"
+                    >
+                      {submittingId === sub.id ? "Adding..." : confirmSubmitId === sub.id ? "Confirm?" : "Add to review"}
+                    </button>
+                  )}
                   <button
                     onClick={() => onEditSub(sub, group)}
                     className="text-[11px] font-semibold text-accent bg-transparent border-none cursor-pointer font-sans px-0 hover:underline"

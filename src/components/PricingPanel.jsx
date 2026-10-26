@@ -2,8 +2,11 @@ import { useState, useEffect, useCallback } from "react";
 import {
   fetchIAPPrices, setIAPPrices, fetchIAPPricePoints,
   fetchSubscriptionPrices, setSubscriptionPrices, fetchSubscriptionPricePoints,
+  fetchIAPEqualizations, fetchSubscriptionEqualizations,
 } from "../api/index.js";
 import { TERRITORIES, TERRITORY_MAP } from "../lib/territories.js";
+
+const BASE_TERRITORY = "USA";
 
 const inputCls = "w-full px-3.5 py-2.5 bg-dark-surface border border-dark-border-light rounded-lg text-dark-text outline-none font-sans text-[13px] transition-colors";
 
@@ -20,6 +23,12 @@ export default function PricingPanel({ productType, productId, groupId, appId, a
   // Cache of loaded price points per territory
   const [pricePointsCache, setPricePointsCache] = useState(new Map());
   const [loadingTerritories, setLoadingTerritories] = useState(new Set());
+
+  // Equalized price points (territory -> { id, customerPrice }) from the last USD base price pick
+  const [equalizedMap, setEqualizedMap] = useState(new Map());
+  const [basePricePointId, setBasePricePointId] = useState("");
+  const [baseLoading, setBaseLoading] = useState(false);
+  const [baseError, setBaseError] = useState(null);
 
   const isIAP = productType === "iap";
 
@@ -85,6 +94,42 @@ export default function PricingPanel({ productType, productId, groupId, appId, a
     setSaveResult(null);
   }
 
+  // Pick one USD price; every other territory gets its equalized price point
+  async function handleBasePriceChange(pricePointId) {
+    setBasePricePointId(pricePointId);
+    setBaseError(null);
+    setSaveResult(null);
+    if (!pricePointId) return;
+
+    setBaseLoading(true);
+    try {
+      const { equalizations = {} } = isIAP
+        ? await fetchIAPEqualizations(appId, productId, pricePointId, accountId)
+        : await fetchSubscriptionEqualizations(appId, groupId, productId, pricePointId, accountId);
+
+      const target = new Map(Object.entries(equalizations));
+      target.set(BASE_TERRITORY, { id: pricePointId });
+
+      setEqualizedMap(target);
+      setPendingChanges((prev) => {
+        const next = new Map(prev);
+        for (const [territory, pp] of target) {
+          if (!TERRITORY_MAP.has(territory)) continue;
+          if (pricingData?.currentPrices?.[territory]?.pricePointId === pp.id) {
+            next.delete(territory);
+          } else {
+            next.set(territory, pp.id);
+          }
+        }
+        return next;
+      });
+    } catch (err) {
+      setBaseError(err.message);
+    } finally {
+      setBaseLoading(false);
+    }
+  }
+
   async function handleApply() {
     if (pendingChanges.size === 0) return;
     setSaving(true);
@@ -144,6 +189,8 @@ export default function PricingPanel({ productType, productId, groupId, appId, a
 
       // On full success: re-fetch and clear pending
       setPendingChanges(new Map());
+      setEqualizedMap(new Map());
+      setBasePricePointId("");
       setPricingData(null);
       setPricePointsCache(new Map());
     } catch (err) {
@@ -232,6 +279,37 @@ export default function PricingPanel({ productType, productId, groupId, appId, a
                     </tr>
                   </thead>
                   <tbody>
+                    <tr className="border-t border-dark-border bg-dark-surface/60">
+                      <td className="px-3 py-2" colSpan={3}>
+                        <span className="font-semibold text-dark-text">Set price for all</span>
+                        <span className="text-dark-dim ml-1.5">
+                          Pick a USD price, other territories are equalized automatically
+                        </span>
+                        {baseError && (
+                          <div className="text-[11px] text-danger mt-0.5">{baseError}</div>
+                        )}
+                      </td>
+                      <td className="px-3 py-2">
+                        <select
+                          className="bg-dark-surface border border-dark-border-light rounded px-2 py-1 text-dark-text text-[12px] outline-none font-sans max-w-[160px]"
+                          value={basePricePointId}
+                          disabled={baseLoading}
+                          onFocus={() => loadPricePoints(BASE_TERRITORY)}
+                          onChange={(e) => handleBasePriceChange(e.target.value)}
+                        >
+                          {baseLoading ? (
+                            <option value={basePricePointId}>Calculating...</option>
+                          ) : (
+                            <>
+                              <option value="">-- USD --</option>
+                              {(pricePointsCache.get(BASE_TERRITORY) || []).map((pp) => (
+                                <option key={pp.id} value={pp.id}>USD {pp.customerPrice}</option>
+                              ))}
+                            </>
+                          )}
+                        </select>
+                      </td>
+                    </tr>
                     {filteredTerritories.map((t) => {
                       const isPending = pendingChanges.has(t.territory);
                       const selectedValue = isPending
@@ -239,6 +317,10 @@ export default function PricingPanel({ productType, productId, groupId, appId, a
                         : t.currentPricePointId || "";
                       const cachedPoints = pricePointsCache.get(t.territory);
                       const isLoadingPoints = loadingTerritories.has(t.territory);
+                      const equalized = equalizedMap.get(t.territory);
+                      const showEqualized = equalized?.customerPrice != null
+                        && equalized.id !== t.currentPricePointId
+                        && !cachedPoints?.some((pp) => pp.id === equalized.id);
 
                       return (
                         <tr
@@ -278,6 +360,11 @@ export default function PricingPanel({ productType, productId, groupId, appId, a
                                       {t.currency} {pp.customerPrice}
                                     </option>
                                   ))}
+                                  {showEqualized && (
+                                    <option value={equalized.id}>
+                                      {t.currency} {equalized.customerPrice}
+                                    </option>
+                                  )}
                                 </>
                               ) : (
                                 <>
@@ -287,6 +374,11 @@ export default function PricingPanel({ productType, productId, groupId, appId, a
                                     </option>
                                   ) : (
                                     <option value="">-- Select --</option>
+                                  )}
+                                  {showEqualized && (
+                                    <option value={equalized.id}>
+                                      {t.currency} {equalized.customerPrice}
+                                    </option>
                                   )}
                                 </>
                               )}
