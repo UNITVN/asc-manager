@@ -7,7 +7,12 @@ import {
   fetchSubscriptionLocalizations, createSubscriptionLocalization, updateSubscriptionLocalization, deleteSubscriptionLocalization,
 } from "../api/index.js";
 import { IAP_TYPES, SUBSCRIPTION_PERIODS } from "../constants/index.js";
+import { LOCALE_DISPLAY_NAMES } from "../constants/index.js";
 import PricingPanel from "./PricingPanel.jsx";
+import IntroOffersPanel from "./IntroOffersPanel.jsx";
+import AvailabilityPanel from "./AvailabilityPanel.jsx";
+import ReviewScreenshotPanel from "./ReviewScreenshotPanel.jsx";
+import GroupLocalizationsPanel from "./GroupLocalizationsPanel.jsx";
 
 const labelCls = "text-[11px] uppercase tracking-wide font-semibold text-dark-dim mb-1.5 block";
 const inputCls = "w-full px-3.5 py-2.5 bg-dark-surface border border-dark-border-light rounded-lg text-dark-text outline-none font-sans text-[13px] transition-colors";
@@ -261,6 +266,10 @@ export default function ProductModal({ mode, target, appId, accountId, isMobile,
               </div>
             )}
 
+            {mode === "edit-group" && (
+              <GroupLocalizationsPanel groupId={target.id} appId={appId} accountId={accountId} />
+            )}
+
             {/* Create subscription fields */}
             {mode === "create-sub" && (
               <>
@@ -409,7 +418,15 @@ export default function ProductModal({ mode, target, appId, accountId, isMobile,
                       <div className="bg-dark-surface rounded-lg px-3 py-2.5 space-y-2">
                         <div className="text-[11px] font-bold text-dark-dim uppercase">Add Localization</div>
                         <div className="grid grid-cols-2 gap-2">
-                          <input className={inputCls} value={newLocale} onChange={(e) => setNewLocale(e.target.value)} placeholder="Locale (e.g. en-US)" />
+                          <select className={inputCls} value={newLocale} onChange={(e) => setNewLocale(e.target.value)}>
+                            <option value="">Select locale...</option>
+                            {Object.entries(LOCALE_DISPLAY_NAMES)
+                              .filter(([code]) => !locs.some((l) => l.locale === code))
+                              .sort((x, y) => x[1].localeCompare(y[1]))
+                              .map(([code, label]) => (
+                                <option key={code} value={code}>{label} ({code})</option>
+                              ))}
+                          </select>
                           <input className={inputCls} value={newLocName} onChange={(e) => setNewLocName(e.target.value)} placeholder="Name" />
                         </div>
                         <textarea
@@ -434,10 +451,41 @@ export default function ProductModal({ mode, target, appId, accountId, isMobile,
               </div>
             )}
 
+            {/* Availability panel (edit modes only) */}
+            {showPricing && (
+              <AvailabilityPanel
+                productType={isIAP ? "iap" : "subscription"}
+                productId={target.id}
+                groupId={target.groupId}
+                appId={appId}
+                accountId={accountId}
+              />
+            )}
+
+            {/* Review screenshot (subscription edit only) */}
+            {showPricing && !isIAP && (
+              <ReviewScreenshotPanel
+                productId={target.id}
+                groupId={target.groupId}
+                appId={appId}
+                accountId={accountId}
+              />
+            )}
+
             {/* Pricing panel (edit modes only) */}
             {showPricing && (
               <PricingPanel
                 productType={isIAP ? "iap" : "subscription"}
+                productId={target.id}
+                groupId={target.groupId}
+                appId={appId}
+                accountId={accountId}
+              />
+            )}
+
+            {/* Introductory offers (subscription edit only) */}
+            {showPricing && !isIAP && (
+              <IntroOffersPanel
                 productId={target.id}
                 groupId={target.groupId}
                 appId={appId}

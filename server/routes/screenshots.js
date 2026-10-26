@@ -265,4 +265,109 @@ router.patch("/screenshot-sets/:setId/screenshots/reorder", async (req, res) => 
   }
 });
 
+// ── Subscription App Review screenshot (one per subscription) ──────────────
+
+const REVIEW_SHOT_BASE = "/:appId/subscription-groups/:groupId/subscriptions/:subId/review-screenshot";
+
+function normalizeReviewShot(item) {
+  if (!item) return null;
+  return {
+    id: item.id,
+    fileName: item.attributes?.fileName,
+    fileSize: item.attributes?.fileSize,
+    imageAsset: item.attributes?.imageAsset,
+    assetDeliveryState: item.attributes?.assetDeliveryState,
+  };
+}
+
+async function fetchReviewShot(account, subId) {
+  const res = await ascFetch(account, `/v1/subscriptions/${subId}/appStoreReviewScreenshot`);
+  return normalizeReviewShot(res.data);
+}
+
+router.get(REVIEW_SHOT_BASE, async (req, res) => {
+  try {
+    const account = resolveAccount(req.query.accountId);
+    res.json({ screenshot: await fetchReviewShot(account, req.params.subId) });
+  } catch (err) {
+    console.error(`Failed to fetch review screenshot for ${req.params.subId}:`, err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+router.post(REVIEW_SHOT_BASE, upload.single("file"), async (req, res) => {
+  const { groupId, subId } = req.params;
+  if (!req.file) return res.status(400).json({ error: "No file provided" });
+
+  try {
+    const account = resolveAccount(req.body.accountId);
+    const buffer = req.file.buffer;
+    const checksum = crypto.createHash("md5").update(buffer).digest("base64");
+
+    // A subscription holds one review screenshot: replace any existing one
+    const existing = await fetchReviewShot(account, subId);
+    if (existing) {
+      await ascFetch(account, `/v1/subscriptionAppStoreReviewScreenshots/${existing.id}`, { method: "DELETE" });
+    }
+
+    const reserve = await ascFetch(account, "/v1/subscriptionAppStoreReviewScreenshots", {
+      method: "POST",
+      body: {
+        data: {
+          type: "subscriptionAppStoreReviewScreenshots",
+          attributes: { fileName: req.file.originalname, fileSize: buffer.length },
+          relationships: {
+            subscription: { data: { type: "subscriptions", id: subId } },
+          },
+        },
+      },
+    });
+
+    const shotId = reserve.data.id;
+    for (const op of reserve.data.attributes.uploadOperations || []) {
+      const headers = {};
+      for (const h of op.requestHeaders) headers[h.name] = h.value;
+      const cdnRes = await fetch(op.url, {
+        method: op.method,
+        headers,
+        body: buffer.subarray(op.offset, op.offset + op.length),
+      });
+      if (!cdnRes.ok) throw new Error(`CDN upload failed: ${cdnRes.status} ${cdnRes.statusText}`);
+    }
+
+    const commit = await ascFetch(account, `/v1/subscriptionAppStoreReviewScreenshots/${shotId}`, {
+      method: "PATCH",
+      body: {
+        data: {
+          type: "subscriptionAppStoreReviewScreenshots",
+          id: shotId,
+          attributes: { uploaded: true, sourceFileChecksum: checksum },
+        },
+      },
+    });
+
+    apiCache.deleteByPrefix(`subs:list:${groupId}:`);
+    res.json({ screenshot: normalizeReviewShot(commit.data) });
+  } catch (err) {
+    console.error(`Failed to upload review screenshot for ${subId}:`, err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
+router.delete(REVIEW_SHOT_BASE, async (req, res) => {
+  const { groupId, subId } = req.params;
+  try {
+    const account = resolveAccount(req.query.accountId);
+    const existing = await fetchReviewShot(account, subId);
+    if (existing) {
+      await ascFetch(account, `/v1/subscriptionAppStoreReviewScreenshots/${existing.id}`, { method: "DELETE" });
+    }
+    apiCache.deleteByPrefix(`subs:list:${groupId}:`);
+    res.json({ success: true });
+  } catch (err) {
+    console.error(`Failed to delete review screenshot for ${subId}:`, err.message);
+    res.status(502).json({ error: err.message });
+  }
+});
+
 export default router;

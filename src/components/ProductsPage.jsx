@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from "react";
 import {
   fetchIAPs, deleteIAP,
   fetchSubscriptionGroups, deleteSubscriptionGroup,
-  deleteSubscription,
+  deleteSubscription, fetchReviewDraft,
 } from "../api/index.js";
 import AppIcon from "./AppIcon.jsx";
 import IAPSection from "./IAPSection.jsx";
 import SubscriptionGroupSection from "./SubscriptionGroupSection.jsx";
 import ProductModal from "./ProductModal.jsx";
+import StatusDot from "./StatusDot.jsx";
 
 export default function ProductsPage({ app, accounts, isMobile }) {
   const [iaps, setIaps] = useState([]);
@@ -19,6 +20,13 @@ export default function ProductsPage({ app, accounts, isMobile }) {
   const [modalMode, setModalMode] = useState(null);
   const [modalTarget, setModalTarget] = useState(null);
   const [subRefreshKey, setSubRefreshKey] = useState(0);
+  const [draft, setDraft] = useState({ submissionId: null, items: [] });
+
+  const loadDraft = useCallback(() => {
+    fetchReviewDraft(app.id, app.accountId).then(setDraft).catch(() => {});
+  }, [app.id, app.accountId]);
+
+  useEffect(() => { loadDraft(); }, [loadDraft]);
 
   const loadData = useCallback(async () => {
     setError(null);
@@ -198,6 +206,27 @@ export default function ProductsPage({ app, accounts, isMobile }) {
                 </button>
               </div>
 
+              {draft.items.length > 0 && (
+                <div className="bg-dark-surface rounded-[10px] px-4 py-3 mb-2 border border-dark-border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <StatusDot status="ADDED_TO_REVIEW" />
+                    <span className="text-[11px] text-dark-dim">
+                      Draft submission, submit it together with the app version
+                    </span>
+                  </div>
+                  <div className="space-y-1">
+                    {draft.items.map((item) => (
+                      <div key={`${item.kind}:${item.id}`} className="flex items-center gap-2 text-[12px]">
+                        <span className="text-[10px] font-bold text-accent-light bg-accent-bg px-1.5 py-0.5 rounded">
+                          {item.kind === "group" ? "Group" : "Sub"}
+                        </span>
+                        <span className="text-dark-text font-semibold truncate">{item.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {groups.length === 0 ? (
                 <div className="text-center py-6 text-dark-ghost">
                   <div className="text-xs font-semibold">No subscription groups yet</div>
@@ -216,6 +245,8 @@ export default function ProductsPage({ app, accounts, isMobile }) {
                       onEditSub={(sub, g) => openModal("edit-sub", { ...sub, groupId: g.id })}
                       onDeleteSub={handleDeleteSub}
                       refreshKey={subRefreshKey}
+                      draftItems={draft.items}
+                      onDraftChanged={loadDraft}
                     />
                   ))}
                 </div>
