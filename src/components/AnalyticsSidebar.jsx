@@ -1,6 +1,7 @@
 const ITEMS = [
   { id: "sales", label: "Sales" },
   { id: "downloads", label: "Downloads" },
+  { id: "metrics", label: "Metrics" },
 ];
 
 export default function AnalyticsSidebar({ active, onSelect, isMobile }) {

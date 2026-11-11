@@ -3,6 +3,7 @@ import { fetchAppSales, setVendorNumber } from "../api/index.js";
 import AppIcon from "./AppIcon.jsx";
 import AnalyticsSidebar from "./AnalyticsSidebar.jsx";
 import SalesAnalytics from "./SalesAnalytics.jsx";
+import PurchaseMetrics from "./PurchaseMetrics.jsx";
 import {
   applyAscDisplaySalesAdjustment,
   formatCurrency,
@@ -13,6 +14,7 @@ import {
 
 const RANGE_OPTIONS = [7, 30, 90];
 const SECTION_METRIC = { sales: "sales", downloads: "downloads" };
+const SECTION_LABEL = { sales: "Sales", downloads: "Downloads", metrics: "Metrics" };
 
 export default function AnalyticsPage({ app, isAdmin, isMobile }) {
   const [section, setSection] = useState("sales");
@@ -25,6 +27,7 @@ export default function AnalyticsPage({ app, isAdmin, isMobile }) {
   const [savingVendor, setSavingVendor] = useState(false);
 
   useEffect(() => {
+    if (section === "metrics") return undefined;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -50,7 +53,7 @@ export default function AnalyticsPage({ app, isAdmin, isMobile }) {
     return () => {
       cancelled = true;
     };
-  }, [app.id, app.accountId, days]);
+  }, [app.id, app.accountId, days, section]);
 
   async function handleSaveVendor() {
     if (!vendorInput.trim()) return;
@@ -85,7 +88,8 @@ export default function AnalyticsPage({ app, isAdmin, isMobile }) {
     : "USD";
   const metricLabel = METRIC_OPTIONS.find((m) => m.id === metric)?.label || "Sales";
   const dateRangeLabel = formatDateRange(data?.range?.from, data?.range?.to);
-  const sectionLabel = section === "sales" ? "Sales" : "Downloads";
+  const sectionLabel = SECTION_LABEL[section];
+  const isMetrics = section === "metrics";
 
   return (
     <div style={{ animation: "asc-slidein 0.3s ease backwards" }} className="min-h-screen flex flex-col">
@@ -120,6 +124,7 @@ export default function AnalyticsPage({ app, isAdmin, isMobile }) {
           <div className="flex items-center justify-between gap-3 mb-4 flex-wrap">
             <h2 className="text-[28px] font-bold text-dark-text m-0 tracking-tight">{sectionLabel}</h2>
 
+            {!isMetrics && (
             <div className="flex items-center gap-2 flex-wrap">
               <button
                 type="button"
@@ -145,20 +150,27 @@ export default function AnalyticsPage({ app, isAdmin, isMobile }) {
                 ))}
               </div>
             </div>
+            )}
           </div>
 
+          {!isMetrics && (
           <p className="text-[11px] text-dark-dim mb-5 mt-1">
             Sales &amp; Trends · next-day data (~8 AM PT)
             {data?.freshness?.latestDate
               ? ` · through ${data.freshness.latestDate}${data.freshness.stale ? " (latest available)" : ""}`
               : ""}
           </p>
+          )}
 
-          {loading && (
+          {isMetrics && !notConfigured && (
+            <PurchaseMetrics app={app} onNotConfigured={() => setNotConfigured(true)} />
+          )}
+
+          {!isMetrics && loading && (
             <p className="text-[13px] text-dark-dim m-0 py-12 text-center">Loading analytics…</p>
           )}
 
-          {!loading && notConfigured && (
+          {(isMetrics || !loading) && notConfigured && (
             <div className="bg-dark-surface rounded-xl border border-dark-border px-5 py-5 space-y-3 max-w-lg">
               <p className="text-[13px] text-dark-dim m-0">
                 Analytics require a vendor number for this ASC account.
@@ -186,11 +198,11 @@ export default function AnalyticsPage({ app, isAdmin, isMobile }) {
             </div>
           )}
 
-          {!loading && error && (
+          {!isMetrics && !loading && error && (
             <p className="text-[13px] text-danger m-0">{error}</p>
           )}
 
-          {!loading && !notConfigured && !error && data && (
+          {!isMetrics && !loading && !notConfigured && !error && data && (
             <div className="space-y-4">
               {metric === "sales" && salesByCurrency.length > 0 && (
                 <div className="bg-dark-surface rounded-xl border border-dark-border px-5 py-5">

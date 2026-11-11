@@ -191,6 +191,10 @@ export default function IntroOffersPanel({ productId, groupId, appId, accountId 
     } catch {
       // Fall back to every territory; Apple rejects the ones that are not on sale.
     }
+    if (sold && sold.size === 0) {
+      setFillNote("No territory has a price yet. Set the subscription price first: Apple only allows offers where it is on sale.");
+      return;
+    }
     const candidates = TERRITORIES.filter((t) => !sold || sold.has(t.code));
 
     const fills = [];

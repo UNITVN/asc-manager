@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import {
   applyAscDisplaySalesAdjustment,
+  buildMetricsCsv,
   estimateTotalProceedsUsd,
+  groupDailyUnits,
   primaryCurrency,
   sortProceedsByCurrency,
   unknownProceedsCurrencies,
@@ -97,5 +99,53 @@ describe("estimateTotalProceedsUsd", () => {
 describe("applyAscDisplaySalesAdjustment", () => {
   it("reduces USD totals by 5.5% for display", () => {
     expect(applyAscDisplaySalesAdjustment(1000)).toBe(945);
+  });
+});
+
+describe("groupDailyUnits", () => {
+  const daily = [
+    { date: "2026-10-03", units: 1 }, // Saturday
+    { date: "2026-10-04", units: 2 }, // Sunday starts a new week
+    { date: "2026-10-31", units: 4 },
+    { date: "2026-11-01", units: 8 },
+  ];
+
+  it("returns days unchanged", () => {
+    expect(groupDailyUnits(daily, "days")).toEqual(daily);
+  });
+
+  it("buckets by Sunday-start week", () => {
+    expect(groupDailyUnits(daily, "weeks")).toEqual([
+      { date: "2026-09-27", units: 1 },
+      { date: "2026-10-04", units: 2 },
+      { date: "2026-10-25", units: 4 },
+      { date: "2026-11-01", units: 8 },
+    ]);
+  });
+
+  it("buckets by month", () => {
+    expect(groupDailyUnits(daily, "months")).toEqual([
+      { date: "2026-10-01", units: 7 },
+      { date: "2026-11-01", units: 8 },
+    ]);
+  });
+});
+
+describe("buildMetricsCsv", () => {
+  it("writes a header and one row per bucket, repeating the filters", () => {
+    const csv = buildMetricsCsv(
+      [{ date: "2026-10-01", units: 3 }, { date: "2026-10-02", units: 0 }],
+      { type: "All Purchases", product: "Pro, Weekly", group: "days" },
+    );
+    expect(csv.split("\r\n")).toEqual([
+      "Date,Units,Purchase Type,Product,Group By",
+      '2026-10-01,3,All Purchases,"Pro, Weekly",days',
+      '2026-10-02,0,All Purchases,"Pro, Weekly",days',
+    ]);
+  });
+
+  it("escapes quotes", () => {
+    const csv = buildMetricsCsv([{ date: "d", units: 1 }], { type: "t", product: 'say "hi"', group: "days" });
+    expect(csv.split("\r\n")[1]).toBe('d,1,t,"say ""hi""",days');
   });
 });

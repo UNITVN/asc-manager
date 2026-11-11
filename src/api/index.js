@@ -791,6 +791,29 @@ export async function fetchAppSales(appId, accountId, { days = 30 } = {}) {
   return res.json();
 }
 
+export async function fetchAppPurchaseMetrics(
+  appId,
+  accountId,
+  { days = 30, from, to, type = "all", productId = "all" } = {},
+) {
+  const params = new URLSearchParams({ accountId, type, productId });
+  if (from && to) {
+    params.set("from", from);
+    params.set("to", to);
+  } else {
+    params.set("days", String(days));
+  }
+  const res = await fetch(`/api/apps/${appId}/sales/metrics?${params}`);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    const error = new Error(err.error || `Failed to fetch metrics: ${res.status}`);
+    error.code = err.code;
+    error.status = res.status;
+    throw error;
+  }
+  return res.json();
+}
+
 export async function fetchVendorNumber(accountId) {
   const res = await fetch(`/api/accounts/${accountId}/vendor-number`);
   if (!res.ok) throw new Error(`Failed to fetch vendor number: ${res.status}`);

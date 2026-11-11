@@ -309,3 +309,65 @@ export function estimateChartLeftPad(labels, minPad = 44) {
   const maxLen = labels.reduce((longest, label) => Math.max(longest, label.length), 0);
   return Math.max(minPad, Math.ceil(maxLen * 6.5) + 10);
 }
+
+export const GROUP_OPTIONS = [
+  { id: "days", label: "Days" },
+  { id: "weeks", label: "Weeks" },
+  { id: "months", label: "Months" },
+];
+
+function bucketStart(isoDate, group) {
+  if (group === "months") return `${isoDate.slice(0, 7)}-01`;
+  if (group === "weeks") {
+    const date = new Date(`${isoDate}T00:00:00Z`);
+    date.setUTCDate(date.getUTCDate() - date.getUTCDay());
+    return date.toISOString().slice(0, 10);
+  }
+  return isoDate;
+}
+
+/** Sum daily purchase units into week (Sunday start) or month buckets, in date order. */
+export function groupDailyUnits(daily, group = "days") {
+  if (group === "days") return daily.map((d) => ({ date: d.date, units: d.units ?? 0 }));
+  const buckets = new Map();
+  for (const day of daily) {
+    const key = bucketStart(day.date, group);
+    buckets.set(key, (buckets.get(key) || 0) + (day.units ?? 0));
+  }
+  return [...buckets.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, units]) => ({ date, units }));
+}
+
+function localIso(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+/** Inclusive day count between two ISO dates. */
+export function daysBetween(from, to) {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000) + 1;
+}
+
+export function todayIso(now = new Date()) {
+  return localIso(now);
+}
+
+function csvCell(value) {
+  const text = String(value ?? "");
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+/**
+ * CSV of the metrics series, one row per bucket. Each row repeats the filters so the
+ * file is self-describing. `date` is the bucket start (day, Sunday of the week, or 1st of the month).
+ */
+export function buildMetricsCsv(series, { type, product, group }) {
+  const header = ["Date", "Units", "Purchase Type", "Product", "Group By"];
+  const lines = series.map((point) =>
+    [point.date, point.units, type, product, group].map(csvCell).join(","),
+  );
+  return [header.join(","), ...lines].join("\r\n");
+}
