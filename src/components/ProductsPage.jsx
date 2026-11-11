@@ -15,6 +15,7 @@ export default function ProductsPage({ app, accounts, isMobile }) {
   const [groups, setGroups] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [actionError, setActionError] = useState(null);
 
   // Modal state
   const [modalMode, setModalMode] = useState(null);
@@ -48,29 +49,32 @@ export default function ProductsPage({ app, accounts, isMobile }) {
   useEffect(() => { loadData(); }, [loadData]);
 
   async function handleDeleteIAP(iap) {
+    setActionError(null);
     try {
       await deleteIAP(app.id, iap.id, app.accountId);
       setIaps((prev) => prev.filter((i) => i.id !== iap.id));
     } catch (err) {
-      setError(err.message);
+      setActionError(err.message);
     }
   }
 
   async function handleDeleteGroup(group) {
+    setActionError(null);
     try {
       await deleteSubscriptionGroup(app.id, group.id, app.accountId);
       setGroups((prev) => prev.filter((g) => g.id !== group.id));
     } catch (err) {
-      setError(err.message);
+      setActionError(err.message);
     }
   }
 
   async function handleDeleteSub(sub, group) {
+    setActionError(null);
     try {
       await deleteSubscription(app.id, group.id, sub.id, app.accountId);
       setSubRefreshKey((k) => k + 1);
     } catch (err) {
-      setError(err.message);
+      setActionError(err.message);
     }
   }
 
@@ -146,6 +150,18 @@ export default function ProductsPage({ app, accounts, isMobile }) {
 
         {!loading && !error && (
           <div className="space-y-8">
+            {actionError && (
+              <div className="flex items-start justify-between gap-3 rounded-lg border border-danger/40 bg-danger/10 px-3 py-2 text-xs text-danger">
+                <span className="break-words min-w-0">{actionError}</span>
+                <button
+                  onClick={() => setActionError(null)}
+                  className="bg-transparent border-none cursor-pointer text-danger font-sans text-sm leading-none px-0"
+                  aria-label="Dismiss"
+                >
+                  {"\u00d7"}
+                </button>
+              </div>
+            )}
             {/* IAP Sections — only show types that have items, plus one "+ New" to create any type */}
             <div>
               <div className="flex items-center justify-between mb-2">

@@ -73,6 +73,9 @@ export default function ProductModal({ mode, target, appId, accountId, isMobile,
     }
   }, [mode, target]);
 
+  // Verified against ASC: PATCH with familySharable (even unchanged) returns 409
+  // IS_FAMILY_SHAREABLE can not be modified for a subscription in MISSING_METADATA.
+  const familySharableLocked = mode === "edit-sub" && target?.state === "MISSING_METADATA";
   const isEditMode = mode.startsWith("edit-");
   const isIAP = mode.includes("iap");
   const isSub = mode.includes("sub");
@@ -105,7 +108,13 @@ export default function ProductModal({ mode, target, appId, accountId, isMobile,
       if (mode === "create-iap") {
         await createIAP(appId, { accountId, name, productId, type });
       } else if (mode === "edit-iap") {
-        await updateIAP(appId, target.id, { accountId, name, familySharable, reviewNote });
+        // ASC rejects any PATCH that includes a locked field (e.g. familySharable once
+        // enabled), even with an unchanged value, so only send what actually changed.
+        const payload = { accountId };
+        if (name !== (target.name || "")) payload.name = name;
+        if (familySharable !== (target.familySharable || false)) payload.familySharable = familySharable;
+        if (reviewNote !== (target.reviewNote || "")) payload.reviewNote = reviewNote;
+        await updateIAP(appId, target.id, payload);
       } else if (mode === "create-group") {
         await createSubscriptionGroup(appId, { accountId, referenceName });
       } else if (mode === "edit-group") {
@@ -113,7 +122,12 @@ export default function ProductModal({ mode, target, appId, accountId, isMobile,
       } else if (mode === "create-sub") {
         await createSubscription(appId, target.groupId, { accountId, name, productId, subscriptionPeriod: period });
       } else if (mode === "edit-sub") {
-        await updateSubscription(appId, target.groupId, target.id, { accountId, name, subscriptionPeriod: period, familySharable, reviewNote });
+        const payload = { accountId };
+        if (name !== (target.name || "")) payload.name = name;
+        if (period !== (target.subscriptionPeriod || "ONE_MONTH")) payload.subscriptionPeriod = period;
+        if (familySharable !== (target.familySharable || false)) payload.familySharable = familySharable;
+        if (reviewNote !== (target.reviewNote || "")) payload.reviewNote = reviewNote;
+        await updateSubscription(appId, target.groupId, target.id, payload);
       }
       onSaved();
     } catch (err) {
@@ -309,9 +323,13 @@ export default function ProductModal({ mode, target, appId, accountId, isMobile,
                     id="familySharableSub"
                     checked={familySharable}
                     onChange={(e) => setFamilySharable(e.target.checked)}
-                    className="w-4 h-4 rounded accent-accent"
+                    disabled={familySharableLocked}
+                    className="w-4 h-4 rounded accent-accent disabled:opacity-50 disabled:cursor-not-allowed"
                   />
-                  <label htmlFor="familySharableSub" className="text-[13px] text-dark-text font-medium cursor-pointer">Family Sharing</label>
+                  <label htmlFor="familySharableSub" className={`text-[13px] text-dark-text font-medium ${familySharableLocked ? "opacity-50" : "cursor-pointer"}`}>Family Sharing</label>
+                  {familySharableLocked && (
+                    <span className="text-[11px] text-dark-dim">Locked by Apple in the current state</span>
+                  )}
                 </div>
                 <div>
                   <label className={labelCls}>Review Note</label>
